@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>개인정보처리방침 — 좋아하는 구석</title>
+<meta name="theme-color" content="#F4F4F1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101215" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{
+  --paper:#F4F4F1; --card:#FFFFFF; --sunk:#EBEBE7;
+  --ink:#15181C; --ink-2:#474D55; --muted:#8A9099;
+  --line:#E3E3DE; --accent:#14425C;
+  --f-display:"Instrument Serif",Georgia,serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#101215; --card:#171A1E; --sunk:#1D2126;
+    --ink:#E9E9E5; --ink-2:#B6BBC1; --muted:#848A92;
+    --line:#262A30; --accent:#8FBBD6;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#101215; --card:#171A1E; --sunk:#1D2126;
+  --ink:#E9E9E5; --ink-2:#B6BBC1; --muted:#848A92;
+  --line:#262A30; --accent:#8FBBD6;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:0;background:var(--paper);color:var(--ink);
+  font-family:var(--f-body);font-weight:400;font-size:15px;line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:660px;margin:0 auto;padding:56px 22px 96px}
+a{color:var(--accent)}
+h1{font-family:var(--f-display);font-weight:400;font-size:38px;line-height:1.15;margin:0 0 6px}
+.sub{color:var(--muted);font-size:13.5px;margin:0 0 40px}
+h2{font-family:var(--f-display);font-weight:400;font-size:23px;margin:38px 0 10px}
+p{margin:0 0 14px;color:var(--ink-2)}
+ul{margin:0 0 14px;padding-left:20px;color:var(--ink-2)}
+li{margin-bottom:7px}
+strong{color:var(--ink);font-weight:500}
+.lede{
+  background:var(--card);border:1px solid var(--line);border-radius:4px;
+  padding:20px 22px;margin:0 0 34px;
+}
+.lede p{margin:0;color:var(--ink);font-size:15.5px}
+code{font-family:var(--f-mono);font-size:13px;background:var(--sunk);padding:1px 5px;border-radius:2px}
+.back{
+  display:inline-block;margin-top:44px;padding-top:22px;
+  border-top:1px solid var(--line);width:100%;font-size:13.5px;
+}
+.note{color:var(--muted);font-size:13px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>개인정보처리방침</h1>
+<p class="sub">좋아하는 구석 · 최종 수정 2026년 8월 22일</p>
+
+<div class="lede">
+  <p>이 앱은 <strong>서버를 두지 않습니다.</strong> 사진, 메모, 태그는 여러분의 기기 안이나
+  여러분이 직접 연결한 저장 공간에만 저장되고, 운영자를 포함한 누구에게도 전송되지 않습니다.</p>
+</div>
+
+<h2>수집하는 정보</h2>
+<p><strong>없습니다.</strong> 이 앱에는 계정 데이터베이스도, 분석 도구도, 광고도, 추적 스크립트도,
+쿠키를 심는 코드도 없습니다. 여러분이 무엇을 담았는지 운영자는 알 수 없습니다.</p>
+
+<h2>기록이 저장되는 곳</h2>
+<ul>
+  <li><strong>브라우저 안</strong> — 기본값입니다. 기기의 IndexedDB(<code>gusuk-archive</code>)에
+  저장되며 해당 브라우저 밖으로 나가지 않습니다.</li>
+  <li><strong>직접 고른 폴더</strong> — 컴퓨터에서 폴더를 연결하면 그 폴더에 파일로 저장됩니다.
+  폴더 선택과 접근 허가는 매번 여러분이 직접 합니다.</li>
+  <li><strong>구글 드라이브</strong> — 드라이브 로그인을 사용하는 경우, 기록은 여러분 본인의
+  구글 드라이브에 저장됩니다. 운영자의 저장 공간이 아닙니다.</li>
+</ul>
+
+<h2>구글 계정으로 로그인할 때</h2>
+<p>드라이브 연동은 <code>drive.file</code> 권한만 요청합니다. 이 권한은
+<strong>이 앱이 직접 만든 파일에만</strong> 접근할 수 있습니다. 드라이브에 이미 들어 있는
+다른 문서·사진·폴더는 이 앱이 열람할 수 없으며, 존재 여부조차 알 수 없습니다.</p>
+<p>인증 토큰은 여러분의 브라우저에만 보관되며 외부로 전송되지 않습니다.
+로그아웃하거나 <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">구글 계정 권한 설정</a>에서
+언제든 접근을 취소할 수 있습니다. 취소해도 드라이브에 저장된 파일은 그대로 남습니다.</p>
+
+<h2>외부로 나가는 요청</h2>
+<p>앱이 접속하는 외부 주소는 다음뿐입니다.</p>
+<ul>
+  <li><strong>Google Fonts</strong> — 글꼴 파일을 받아옵니다. 최초 1회 이후에는 기기에 저장돼
+  오프라인에서도 동작합니다.</li>
+  <li><strong>Google Drive API</strong> — 드라이브 로그인을 사용할 때만, 여러분의 파일을
+  여러분의 드라이브에 읽고 쓰기 위해서만 사용합니다.</li>
+</ul>
+<p>그 외 어떤 서버로도 통신하지 않습니다.</p>
+
+<h2>기록을 지우는 방법</h2>
+<ul>
+  <li>앱 안에서 사진을 개별 삭제</li>
+  <li>브라우저의 사이트 데이터 삭제 (해당 기기의 기록이 전부 지워집니다)</li>
+  <li>연결한 폴더나 드라이브 폴더를 직접 삭제</li>
+</ul>
+<p>운영자가 보관하는 사본이 없으므로, 여러분이 지우면 그것으로 끝입니다.
+같은 이유로 <strong>운영자는 복구를 도와드릴 수 없습니다.</strong>
+앱의 <code>백업 저장</code> 기능을 주기적으로 사용해 주세요.</p>
+
+<h2>아동의 개인정보</h2>
+<p>이 앱은 어떤 이용자로부터도 개인정보를 수집하지 않으므로, 아동으로부터 수집하는 정보도 없습니다.</p>
+
+<h2>방침이 바뀔 때</h2>
+<p>내용이 바뀌면 이 페이지와 위의 수정 날짜가 갱신됩니다.
+수집 항목이 생기는 변경이라면 앱 안에서 별도로 안내합니다.</p>
+
+<h2>문의</h2>
+<p class="note">※ 배포 전에 이 줄을 실제 연락처로 바꿔 주세요. 구글 OAuth 동의 화면에 쓰는
+이메일과 같은 주소를 적으면 됩니다.</p>
+
+<a class="back" href="./">← 좋아하는 구석으로 돌아가기</a>
+
+</div>
+</body>
+</html>

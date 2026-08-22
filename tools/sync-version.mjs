@@ -21,6 +21,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // 해시 대상: 사용자에게 실제로 보이는 것들
 const TRACKED = [
   "index.html",
+  "privacy.html",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",

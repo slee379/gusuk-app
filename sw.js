@@ -14,7 +14,7 @@
  * 아래 fetch 전략을 전부 "일단 캐시로 즉시 띄우고 뒤에서 새로 받아 교체"로
  * 짜두었다. 버전 갱신은 청소용이지 신선도용이 아니다.
  */
-const VERSION = "8c8b83ffd0e4"; /* BUILD */
+const VERSION = "79d2b43e139e"; /* BUILD */
 
 const SHELL = `gusuk-shell-${VERSION}`;
 const FONTS = `gusuk-fonts-v1`; // 폰트는 URL 자체가 불변이라 버전을 따라갈 필요가 없다
@@ -22,6 +22,7 @@ const FONTS = `gusuk-fonts-v1`; // 폰트는 URL 자체가 불변이라 버전�
 const SHELL_FILES = [
   "./",
   "./index.html",
+  "./privacy.html",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -143,7 +144,14 @@ self.addEventListener("fetch", (e) => {
           caches.open(SHELL).then((c) => c.put("./index.html", copy));
           return res;
         })
-        .catch(() => caches.match("./index.html").then((r) => r || caches.match("./")))
+        // 오프라인: 그 페이지 자체를 캐시에서 먼저 찾고(개인정보처리방침 등),
+        // 없으면 앱 첫 화면으로 떨어뜨린다
+        .catch(() =>
+          caches
+            .match(req, { ignoreSearch: true })
+            .then((r) => r || caches.match("./index.html"))
+            .then((r) => r || caches.match("./"))
+        )
     );
     return;
   }
