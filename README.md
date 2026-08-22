@@ -13,6 +13,7 @@ gusuk-app/
 ├ sw.js                   서비스 워커 (오프라인 실행). VERSION 은 자동 갱신됨
 ├ icons/                  홈 화면 아이콘 (make-icons.mjs 가 생성 — 직접 고치지 말 것)
 ├ deploy.ps1              배포 한 방
+├ mcp/                    Claude 연결용 MCP 서버 (웹 배포와 무관)
 └ tools/
    ├ sync-version.mjs     sw.js 버전 자동 갱신
    ├ make-icons.mjs       아이콘 생성 (색·형태를 바꾸고 다시 돌리면 전부 재생성)
@@ -136,6 +137,16 @@ node tools/import-artifact.mjs <받은HTML경로>
 - 결과는 메모리에만 둔다 — 백업 형식(`app:"gusuk"`, `v:1`)을 건드리지 않기 위해서다.
 
 색 이름 사전을 고치려면 `index.html` 의 `nameColor()` 를 보면 된다.
+
+## Claude · 옵시디언과 연결
+
+`mcp/` 에 MCP 서버가 있다. Claude 가 아카이브를 직접 읽고 쓰게 해준다 —
+태그 정리, 공통점 찾기, 옵시디언으로 마크다운 내보내기.
+
+**단, 폴더 모드일 때만 된다.** 브라우저 안(IndexedDB)에 있는 기록은
+샌드박스 밖에서 읽을 방법이 없다. 폰의 기록은 `백업 저장` → 컴퓨터에서 `불러오기` 를 거쳐야 한다.
+
+설치와 도구 목록은 [`mcp/README.md`](mcp/README.md) 참고.
 
 ## 폰 화면
 
