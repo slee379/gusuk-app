@@ -365,6 +365,66 @@ button{background:none;border:0;padding:0;cursor:pointer}
   font-size:13px;line-height:1.6;padding:0;min-height:22px}
 .rgitem textarea::placeholder{color:var(--faint)}
 
+/* ── 공간 (여러 장을 한 자리로 묶기) ─────────────────── */
+.card.space .stack{position:relative;display:block}
+.card.space .stack::before,
+.card.space .stack::after{
+  content:"";position:absolute;left:5px;right:5px;top:-4px;height:8px;
+  background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:3px 3px 0 0;
+}
+.card.space .stack::after{left:10px;right:10px;top:-8px;opacity:.6}
+.card.space{margin-top:10px}
+.card.space .stack img{display:block;width:100%;height:auto;background:var(--sunk)}
+.card.space .cnt{
+  position:absolute;right:8px;bottom:8px;padding:3px 8px;border-radius:2px;
+  background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(6px);
+  border:1px solid var(--line);font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);
+}
+.card.space .t{font-family:var(--f-display);font-size:16px;line-height:1.3}
+
+.spacehead{
+  border:1px solid var(--line);border-radius:4px;background:var(--card);
+  padding:16px 18px 18px;margin:0 0 20px;max-width:660px;
+}
+.spacehead .back{margin-bottom:12px}
+.spname{
+  width:100%;border:0;background:none;padding:0;margin:0 0 4px;
+  font-family:var(--f-display);font-size:26px;line-height:1.25;
+}
+.spname::placeholder{color:var(--faint)}
+.spacehead .note{margin-bottom:16px}
+.spacehead .facts h3{display:flex;gap:8px;align-items:baseline;margin:0 0 8px;
+  padding-top:14px;border-top:1px solid var(--line)}
+.factrow{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.factrow input{
+  border:1px solid var(--line);background:var(--paper);border-radius:3px;
+  padding:6px 8px;font-size:13px;min-width:0;
+}
+.factrow .fk{flex:0 0 34%}
+.factrow .fv{flex:1}
+.factrow input:focus{border-color:var(--accent-line);outline:none}
+.factrow .del{width:22px;height:22px;display:grid;place-items:center;border-radius:2px;
+  color:var(--faint);flex:none}
+.factrow .del:hover{color:var(--danger);background:var(--sunk)}
+.factrow .del svg{width:12px;height:12px}
+
+.spsel{
+  width:100%;height:34px;padding:0 8px;border:1px solid var(--line);
+  background:var(--card);border-radius:3px;font-size:13px;
+}
+.spsel:focus{border-color:var(--accent-line);outline:none}
+.spnew{display:flex;gap:6px;margin-top:7px}
+.spnew input{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);
+  border-radius:3px;padding:0 9px;height:32px;font-size:13px}
+.spnew input:focus{border-color:var(--accent-line);outline:none}
+.spgo{margin-top:8px;width:100%;justify-content:center}
+@media (max-width:820px){
+  .spacehead{padding:14px 15px 16px}
+  .spname{font-size:22px}
+  .factrow .fk{flex:0 0 38%}
+  .factrow input{font-size:16px}   /* iOS 확대 방지 */
+}
+
 /* 사진에서 읽은 색 제안 */
 .autobox{margin-top:9px}
 .autohead{margin-bottom:6px}
@@ -708,7 +768,7 @@ const imgPut= (k,b)=>tx("img","readwrite",s=>s.put(b,k));
 const imgDel= k=>tx("img","readwrite",s=>s.delete(k));
 
 /* ══ 상태 ══════════════════════════════════════════════ */
-let ST={v:1,seq:1,items:[],tags:[]};
+let ST={v:1,seq:1,items:[],tags:[],spaces:[]};
 let URLS=new Map();      // imgKey -> objectURL
 let IMGS=new Map();      // imgKey -> HTMLImageElement (그래프용)
 let saveTimer=null, storageWarned=false;
@@ -746,6 +806,40 @@ async function hydrateURLs(){
       if(blob) URLS.set(k,URL.createObjectURL(blob));
     }catch(e){ console.warn("image load failed",k,e); }
   }
+}
+
+/* ══ 공간 ══════════════════════════════════════════════
+   여러 장을 한 곳으로 묶는다. 같은 자리를 각도만 달리해 찍은 사진들처럼.
+
+   성격이 갈린다 — 공간은 객관(어디, 언제, 무슨 마감재),
+   사진은 주관(왜 좋았는지). 그래서 '사실' 필드는 공간에만 있다. */
+function spaceById(id){ return (ST.spaces||[]).find(s=>s.id===id); }
+function spaceByName(name){
+  const n=String(name||"").trim().toLowerCase();
+  return (ST.spaces||[]).find(s=>s.name.toLowerCase()===n);
+}
+function ensureSpace(name){
+  const clean=String(name||"").trim().replace(/\s+/g," ");
+  if(!clean) return null;
+  let sp=spaceByName(clean);
+  if(sp) return sp;
+  sp={id:uid("s"),name:clean,note:"",facts:[],cover:null,
+      createdAt:Date.now(),updatedAt:Date.now()};
+  ST.spaces=(ST.spaces||[]).concat([sp]);
+  return sp;
+}
+function spaceItems(id){
+  return ST.items.filter(it=>it.space===id).sort((a,b)=>a.createdAt-b.createdAt);
+}
+function spaceCover(sp){
+  const list=spaceItems(sp.id);
+  if(sp.cover){ const c=list.find(x=>x.id===sp.cover); if(c) return c; }
+  return list[0]||null;
+}
+/* 아무 사진도 남지 않은 공간은 치운다 (태그를 pruneTags 로 치우는 것과 같은 규칙) */
+function pruneSpaces(){
+  const used=new Set(ST.items.map(it=>it.space).filter(Boolean));
+  ST.spaces=(ST.spaces||[]).filter(sp=>used.has(sp.id));
 }
 
 /* ══ 태그 ══════════════════════════════════════════════ */
@@ -868,7 +962,7 @@ async function addFiles(files){
       const it={
         id:uid("p"),
         title:f.name.replace(/\.[a-z0-9]+$/i,"").slice(0,80),
-        note:"", tags:[], regions:[], links:[],
+        note:"", tags:[], regions:[], links:[], space:null,
         img:null, createdAt:Date.now()+added, updatedAt:Date.now()
       };
       if(Vault.ok){
@@ -900,8 +994,8 @@ async function deleteItem(id){
   ST.items.forEach(o=>{ o.links=(o.links||[]).filter(l=>l!==id); });
   const key=it.img&&it.img.key;
   if(key){ const u=URLS.get(key); if(u) URL.revokeObjectURL(u); URLS.delete(key); IMGS.delete(key); }
-  pruneTags();
-  if(Vault.ok){ await vaultDeleteItem(it); await vaultWriteTags(); }
+  pruneTags(); pruneSpaces();
+  if(Vault.ok){ await vaultDeleteItem(it); await vaultWriteTags(); await vaultWriteSpaces(); }
   else { if(key){ try{await imgDel(key);}catch(e){} } save(); }
   renderAll();
   toast("한 장을 지웠어요");
@@ -996,6 +1090,47 @@ function regionCardHTML(o){
     '<div class="meta">'+memo+(tg?'<div class="row">'+tg+'</div>':"")+
     '<div class="from">'+esc(o.it.title||"제목 없음")+'</div></div></article>';
 }
+/* 지금 들어가 있는 공간. null 이면 전체 보기. */
+let INSPACE=null;
+
+function spaceCardHTML(sp,shown,total){
+  const cov=spaceCover(sp);
+  const src=cov?urlFor(cov.img&&cov.img.key):"";
+  const ratio=cov&&cov.img&&cov.img.w?(cov.img.h/cov.img.w*100):66;
+  const n=shown<total? shown+" / "+total : String(total);
+  const facts=(sp.facts||[]).length;
+  return '<article class="card space" data-space="'+sp.id+'" tabindex="0">'+
+    '<div class="stack">'+
+      (src?'<img loading="lazy" src="'+src+'" alt="">'
+          :'<div class="crop" style="padding-top:'+ratio+'%"></div>')+
+      '<span class="cnt">'+esc(n)+'장</span>'+
+    '</div>'+
+    '<div class="meta">'+
+      '<div class="t">'+esc(sp.name)+'</div>'+
+      (sp.note?'<div class="memo">'+esc(sp.note)+'</div>':"")+
+      (facts?'<div class="row"><span class="mini">사실 '+facts+'</span></div>':"")+
+    '</div></article>';
+}
+
+/* 공간 안에 들어왔을 때 위에 뜨는 머리말 — 이름·메모·사실을 여기서 고친다 */
+function spaceHeadHTML(sp){
+  const rows=(sp.facts||[]).map((f,i)=>
+    '<div class="factrow" data-fi="'+i+'">'+
+      '<input class="fk" value="'+esc(f.k)+'" placeholder="항목">'+
+      '<input class="fv" value="'+esc(f.v)+'" placeholder="내용">'+
+      '<button class="del" data-delfact="'+i+'" title="지우기">'+ICON_X+'</button>'+
+    '</div>').join("");
+  return '<div class="spacehead">'+
+    '<button class="btn ghost back" data-back>← 모든 구석</button>'+
+    '<input class="spname" id="spName" value="'+esc(sp.name)+'" placeholder="공간 이름">'+
+    '<textarea class="note" id="spNote" rows="1" placeholder="이 공간은 어떤 곳인지">'+esc(sp.note||"")+'</textarea>'+
+    '<div class="facts">'+
+      '<h3><span class="lbl">사실</span><span class="lbl" style="opacity:.7">치수·마감재·시기처럼 취향이 아닌 것</span></h3>'+
+      '<div id="factList">'+rows+'</div>'+
+      '<button class="btn ghost" id="addFact">+ 항목 추가</button>'+
+    '</div></div>';
+}
+
 function renderArchive(){
   const total=ST.items.length;
   const regionsAll=ST.items.reduce((n,it)=>n+(it.regions||[]).length,0);
@@ -1028,13 +1163,84 @@ function renderArchive(){
   }
 
   const list=filtered();
+
+  /* 공간 안에 들어와 있으면 그 공간의 사진만 낱장으로 */
+  if(INSPACE){
+    const sp=spaceById(INSPACE);
+    if(!sp){ INSPACE=null; renderArchive(); return; }
+    const mine=list.filter(it=>it.space===sp.id);
+    $("#viewTitle").textContent=sp.name;
+    $("#viewSub").textContent=mine.length+"장";
+    wrap.innerHTML=spaceHeadHTML(sp)+
+      (mine.length? '<div class="grid">'+mine.map(cardHTML).join("")+'</div>'
+                  : '<div class="blank"><h3>이 공간엔 아직 없네요</h3><p>거른 조건을 지우면 다시 보일 수 있어요.</p></div>');
+    wireSpaceHead(sp);
+    return;
+  }
+
   $("#viewSub").textContent = list.length===total ? total+"장 · 메모 "+regionsAll+"개"
     : list.length+"장 / 전체 "+total+"장";
   if(!list.length){
     wrap.innerHTML='<div class="blank"><h3>여기엔 아직 없네요</h3><p>다른 태그를 골라보거나 검색어를 지워보세요.</p></div>';
     return;
   }
-  wrap.innerHTML='<div class="grid">'+list.map(cardHTML).join("")+'</div>';
+
+  /* 공간에 묶인 사진은 낱장이 아니라 공간 카드 하나로 보여준다 */
+  const cards=[]; const seen=new Set();
+  for(const it of list){
+    if(!it.space){ cards.push({t:it.createdAt,html:cardHTML(it)}); continue; }
+    if(seen.has(it.space)) continue;
+    seen.add(it.space);
+    const sp=spaceById(it.space);
+    if(!sp){ cards.push({t:it.createdAt,html:cardHTML(it)}); continue; }
+    const shown=list.filter(x=>x.space===sp.id).length;
+    const all=spaceItems(sp.id).length;
+    cards.push({t:it.createdAt,html:spaceCardHTML(sp,shown,all)});
+  }
+  cards.sort((a,b)=>b.t-a.t);
+  wrap.innerHTML='<div class="grid">'+cards.map(c=>c.html).join("")+'</div>';
+}
+
+function wireSpaceHead(sp){
+  const wrap=$("#gridWrap");
+  const back=wrap.querySelector("[data-back]");
+  if(back) back.addEventListener("click",()=>{ INSPACE=null; renderArchive(); });
+  const nm=wrap.querySelector("#spName");
+  if(nm) nm.addEventListener("input",()=>{
+    const v=nm.value.trim();
+    if(!v) return;
+    sp.name=v; sp.updatedAt=Date.now();
+    saveSpaces();
+  });
+  const nt=wrap.querySelector("#spNote");
+  if(nt){ autoGrow(nt); nt.addEventListener("input",()=>{
+    autoGrow(nt); sp.note=nt.value; sp.updatedAt=Date.now(); saveSpaces();
+  }); }
+  const add=wrap.querySelector("#addFact");
+  if(add) add.addEventListener("click",()=>{
+    sp.facts=(sp.facts||[]).concat([{k:"",v:""}]);
+    saveSpaces(); renderArchive();
+    const rows=$("#factList");
+    const last=rows&&rows.lastElementChild;
+    if(last) last.querySelector(".fk").focus();
+  });
+  wrap.querySelectorAll(".factrow").forEach(row=>{
+    const i=+row.dataset.fi;
+    row.querySelector(".fk").addEventListener("input",e=>{ sp.facts[i].k=e.target.value; saveSpaces(); });
+    row.querySelector(".fv").addEventListener("input",e=>{ sp.facts[i].v=e.target.value; saveSpaces(); });
+    row.querySelector("[data-delfact]").addEventListener("click",()=>{
+      sp.facts.splice(i,1); saveSpaces(); renderArchive();
+    });
+  });
+}
+
+/* 공간 정보는 사진 노트가 아니라 spaces.json 에 있다 */
+let spTimer=null;
+function saveSpaces(){
+  if(Vault.ok){
+    clearTimeout(spTimer);
+    spTimer=setTimeout(()=>vaultWriteSpaces(),400);
+  }else save();
 }
 function blankHTML(){
   return '<div class="blank"><h3>첫 장면을 담아보세요</h3>'+
@@ -1049,7 +1255,7 @@ function blankHTML(){
 }
 
 /* ══ 폴더 저장소 (옵시디언 방식) ═══════════════════════ */
-const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,timer:null,loading:false};
+const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,spacesSeen:0,timer:null,loading:false};
 const FS_OK = typeof window.showDirectoryPicker === "function";
 
 function tagNames(ids){
@@ -1059,8 +1265,10 @@ function tagIds(names){
   return (names||[]).map(n=>{const t=ensureTag(String(n));return t?t.id:null;}).filter(Boolean);
 }
 function noteFromItem(it){
+  const sp=it.space?spaceById(it.space):null;
   return {app:"gusuk",v:1,id:it.id,
     title:it.title||"",note:it.note||"",
+    space:sp?sp.name:null,   /* id 가 아니라 이름으로 — 태그와 같은 이유 */
     tags:tagNames(it.tags),
     regions:(it.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:tagNames(r.tags)})),
     links:it.links||[],
@@ -1068,7 +1276,9 @@ function noteFromItem(it){
     createdAt:it.createdAt,updatedAt:it.updatedAt||Date.now()};
 }
 function itemFromNote(d){
+  const sp=d.space?ensureSpace(d.space):null;
   return {id:d.id,title:d.title||"",note:d.note||"",
+    space:sp?sp.id:null,
     tags:tagIds(d.tags),
     regions:(d.regions||[]).map(r=>({id:r.id,x:+r.x,y:+r.y,w:+r.w,h:+r.h,text:r.text||"",tags:tagIds(r.tags)})),
     links:Array.isArray(d.links)?d.links:[],
@@ -1111,6 +1321,29 @@ async function vaultWriteTags(){
   }catch(e){ vaultTrouble(e); }
   finally{ Vault.busy--; }
 }
+async function vaultWriteSpaces(){
+  if(!Vault.ok) return;
+  Vault.busy++;
+  try{
+    const payload={app:"gusuk",v:1,updatedAt:Date.now(),
+      spaces:(ST.spaces||[]).map(sp=>({name:sp.name,note:sp.note||"",
+        facts:(sp.facts||[]).map(f=>({k:f.k,v:f.v}))}))};
+    Vault.spacesSeen=await writeText(Vault.dir,"spaces.json",JSON.stringify(payload,null,1));
+  }catch(e){ vaultTrouble(e); }
+  finally{ Vault.busy--; }
+}
+/* spaces.json 은 이름·메모·사실만 담는다. 어떤 사진이 어느 공간인지는
+   각 노트의 space 필드가 진실이다 — 한 곳에만 적어야 어긋나지 않는다. */
+function applySpaceMeta(list){
+  (list||[]).forEach(rec=>{
+    if(!rec||!rec.name) return;
+    const sp=ensureSpace(rec.name);
+    if(!sp) return;
+    sp.note=rec.note||"";
+    sp.facts=Array.isArray(rec.facts)?rec.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")})):[];
+  });
+}
+
 async function vaultWriteImage(it,blob,ext){
   if(!Vault.ok) return;
   Vault.busy++;
@@ -1154,8 +1387,16 @@ async function vaultLoadAll(){
     const d=JSON.parse(await f.text());
     (d.tags||[]).forEach(t=>tags.push(t));
   }catch(e){ /* 아직 없음 */ }
-  ST.tags=[]; Vault.seen.clear();
+  let spaceMeta=[];
+  try{
+    const fh=await Vault.dir.getFileHandle("spaces.json");
+    const f=await fh.getFile(); Vault.spacesSeen=f.lastModified;
+    const d=JSON.parse(await f.text());
+    spaceMeta=d.spaces||[];
+  }catch(e){ /* 아직 없음 */ }
+  ST.tags=[]; ST.spaces=[]; Vault.seen.clear();
   tags.forEach(t=>ensureTag(t.name,t.cat));
+  applySpaceMeta(spaceMeta);
   let broken=[];
   try{
     const notes=await subDir("notes");
@@ -1172,7 +1413,8 @@ async function vaultLoadAll(){
     }
   }catch(e){ /* notes 폴더 없음 = 빈 아카이브 */ }
   ST.items=items.sort((a,b)=>a.createdAt-b.createdAt);
-  pruneTags();
+  pruneTags(); pruneSpaces();
+  applySpaceMeta(spaceMeta);   /* 노트가 만든 공간에 메모·사실을 다시 입힌다 */
   Vault.lastSync=Date.now(); Vault.loading=false;
   renderAll(); renderVaultUI();
   if(broken.length) toast(broken.length+"개 파일은 건너뛰었어요 (동기화 충돌본일 수 있어요)",true);
@@ -1212,6 +1454,15 @@ async function vaultSync(quiet){
         changed=true;
       }
     }catch(e){}
+    try{
+      const fh=await Vault.dir.getFileHandle("spaces.json");
+      const f=await fh.getFile();
+      if(f.lastModified>Vault.spacesSeen){
+        Vault.spacesSeen=f.lastModified;
+        applySpaceMeta((JSON.parse(await f.text())||{}).spaces||[]);
+        changed=true;
+      }
+    }catch(e){}
     const notes=await subDir("notes");
     const present=new Set();
     for await (const [name,h] of notes.entries()){
@@ -1243,7 +1494,7 @@ async function vaultSync(quiet){
     });
   }catch(e){ if(!quiet) vaultTrouble(e); return; }
   Vault.lastSync=Date.now();
-  if(changed){ pruneTags(); renderAll(); loadVaultImages(); }
+  if(changed){ pruneTags(); pruneSpaces(); renderAll(); loadVaultImages(); }
   renderVaultUI();
 }
 
@@ -1736,6 +1987,7 @@ function sheetHTML(){
   '<aside class="panel" id="panel">'+
     '<div class="grp"><textarea class="ttl" id="pTitle" rows="1" placeholder="제목 없음"></textarea>'+
       '<div class="date mono" id="pDate"></div></div>'+
+    '<div class="grp"><h3><span class="lbl">공간</span></h3><div id="pSpace"></div></div>'+
     '<div class="grp"><h3><span class="lbl">태그</span></h3><div id="pTags"></div>'+
       '<div id="pAuto" class="autobox" hidden></div></div>'+
     '<div class="grp"><h3><span class="lbl">한 줄 인상</span></h3>'+
@@ -1821,7 +2073,55 @@ function renderPanel(){
   n.value=CUR.note||""; autoGrow(n);
   PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"색, 소재, 분위기…");
   renderAuto();
+  renderSpacePick();
   renderLinks();
+}
+
+/* 이 사진이 어느 공간에 속하는지 고른다. 같은 자리를 여러 각도로 찍었을 때 묶인다. */
+function renderSpacePick(){
+  if(!sheetEl||!CUR) return;
+  const box=sheetEl.querySelector("#pSpace");
+  const list=(ST.spaces||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"ko"));
+  const cur=CUR.space?spaceById(CUR.space):null;
+  box.innerHTML=
+    '<select class="spsel" id="spSel">'+
+      '<option value="">묶지 않음</option>'+
+      list.map(sp=>'<option value="'+sp.id+'"'+(cur&&cur.id===sp.id?' selected':'')+'>'+esc(sp.name)+'</option>').join("")+
+      '<option value="__new">+ 새 공간 만들기…</option>'+
+    '</select>'+
+    '<div class="spnew" id="spNew" hidden>'+
+      '<input id="spNewName" placeholder="공간 이름 (예: 성수동 카페 A)">'+
+      '<button class="btn" id="spNewOk">만들기</button>'+
+    '</div>'+
+    (cur?'<button class="btn ghost spgo" data-gospace="'+cur.id+'">이 공간 열기 ('+spaceItems(cur.id).length+'장)</button>':"");
+
+  const sel=box.querySelector("#spSel"), nb=box.querySelector("#spNew");
+  sel.addEventListener("change",()=>{
+    if(sel.value==="__new"){ nb.hidden=false; box.querySelector("#spNewName").focus(); return; }
+    nb.hidden=true;
+    setItemSpace(sel.value||null);
+  });
+  const mk=()=>{
+    const name=box.querySelector("#spNewName").value.trim();
+    if(!name){ toast("이름을 적어주세요.",true); return; }
+    const sp=ensureSpace(name);
+    setItemSpace(sp?sp.id:null);
+    saveSpaces();
+  };
+  box.querySelector("#spNewOk").addEventListener("click",mk);
+  box.querySelector("#spNewName").addEventListener("keydown",e=>{
+    if(e.key==="Enter"){ e.preventDefault(); mk(); }
+  });
+  const go=box.querySelector("[data-gospace]");
+  if(go) go.addEventListener("click",()=>{
+    INSPACE=go.dataset.gospace; closeSheet(); setView("archive"); renderArchive();
+  });
+}
+function setItemSpace(id){
+  CUR.space=id||null;
+  CUR.updatedAt=Date.now();
+  save(CUR); pruneSpaces();
+  renderSpacePick(); renderArchive(); graphDirty();
 }
 
 /* 사진에서 읽어낸 색을 태그 후보로 보여준다. 누르면 태그가 된다. */
@@ -2479,7 +2779,7 @@ async function exportAll(){
   let ok=0;
   for(let i=0;i<packs.length;i++){
     const payload={app:"gusuk",v:1,exportedAt:Date.now(),part:i+1,parts:packs.length,
-      tags:ST.tags,items:packs[i]};
+      tags:ST.tags,spaces:ST.spaces||[],items:packs[i]};
     const name="\uc88b\uc544\ud558\ub294\uad6c\uc11d-"+stamp+(packs.length>1?"-"+(i+1)+"of"+packs.length:"")+".json";
     if(await saveFile(name,JSON.stringify(payload))) ok++;
     else break;
@@ -2496,6 +2796,15 @@ async function importFiles(files){
     if(!data||data.app!=="gusuk"||!Array.isArray(data.items)){ toast(f.name+" 은(는) 이 아카이브의 백업이 아니에요.",true); continue; }
     const remap=new Map();
     (data.tags||[]).forEach(t=>{ const nt=ensureTag(t.name,t.cat); if(nt) remap.set(t.id,nt.id); });
+    /* 공간도 id 가 아니라 이름으로 맞춘다 — 다른 기기에서 온 백업이어도 같은 이름이면 합쳐진다 */
+    const spmap=new Map();
+    (data.spaces||[]).forEach(sp=>{
+      const ns=ensureSpace(sp.name); if(!ns) return;
+      spmap.set(sp.id,ns.id);
+      if(sp.note&&!ns.note) ns.note=sp.note;
+      if(Array.isArray(sp.facts)&&!(ns.facts||[]).length)
+        ns.facts=sp.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")}));
+    });
     const fix=ids=>(ids||[]).map(id=>remap.get(id)||id).filter(id=>ST.tags.some(t=>t.id===id));
     for(const rec of data.items){
       if(ST.items.some(x=>x.id===rec.id)) continue;
@@ -2503,6 +2812,7 @@ async function importFiles(files){
       if(rec.image){ try{ blob=await (await fetch(rec.image)).blob(); }catch(e){ console.warn(e); } }
       const it={
         id:rec.id,title:rec.title||"",note:rec.note||"",
+        space:rec.space?(spmap.get(rec.space)||null):null,
         tags:fix(rec.tags),
         regions:(rec.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:fix(r.tags)})),
         links:rec.links||[],
@@ -2530,8 +2840,8 @@ async function importFiles(files){
   }
   const ids=new Set(ST.items.map(x=>x.id));
   ST.items.forEach(it=>{ it.links=(it.links||[]).filter(l=>ids.has(l)&&l!==it.id); });
-  pruneTags();
-  if(Vault.ok) await vaultWriteTags(); else save();
+  pruneTags(); pruneSpaces();
+  if(Vault.ok){ await vaultWriteTags(); await vaultWriteSpaces(); } else save();
   renderAll();
   toast(items? items+"장을 불러왔어요" : "새로 불러올 사진이 없었어요");
 }
@@ -2598,11 +2908,17 @@ function wire(){
   $$("#modeSw button").forEach(b=>b.addEventListener("click",()=>{ MODE=b.dataset.mode; renderArchive(); }));
   $("#gridWrap").addEventListener("click",e=>{
     if(e.target.closest("[data-add]")){ $("#filePick").click(); return; }
+    if(e.target.closest(".spacehead")) return;   /* 머리말 입력칸은 그냥 둔다 */
+    const sp=e.target.closest("[data-space]");
+    if(sp){ INSPACE=sp.dataset.space; renderArchive(); $("#main").scrollTop=0; return; }
     const c=e.target.closest("[data-open]"); if(c) openItem(c.dataset.open,c.dataset.rgsel);
   });
   $("#gridWrap").addEventListener("keydown",e=>{
+    if(e.key!=="Enter"&&e.key!==" ") return;
+    const sp=e.target.closest("[data-space]");
+    if(sp){ e.preventDefault(); INSPACE=sp.dataset.space; renderArchive(); return; }
     const c=e.target.closest("[data-open]");
-    if(c&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); openItem(c.dataset.open,c.dataset.rgsel); }
+    if(c){ e.preventDefault(); openItem(c.dataset.open,c.dataset.rgsel); }
   });
 
   let dragDepth=0, dropEl=null;
@@ -2694,8 +3010,10 @@ async function intakeFromOutside(){
   try{
     const saved=await kvGet("state");
     if(saved&&Array.isArray(saved.items)){
-      ST=Object.assign({v:1,seq:1,items:[],tags:[]},saved);
-      ST.items.forEach(it=>{ it.tags=it.tags||[]; it.regions=it.regions||[]; it.links=it.links||[]; });
+      ST=Object.assign({v:1,seq:1,items:[],tags:[],spaces:[]},saved);
+      ST.spaces=ST.spaces||[];
+      ST.items.forEach(it=>{ it.tags=it.tags||[]; it.regions=it.regions||[]; it.links=it.links||[];
+        if(it.space===undefined) it.space=null; });
       await hydrateURLs();
     }
   }catch(e){

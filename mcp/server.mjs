@@ -113,6 +113,7 @@ function brief(n) {
     id: n.id,
     title: n.title || "(제목 없음)",
     date: n.createdAt ? new Date(n.createdAt).toISOString().slice(0, 10) : null,
+    space: n.space || null,
     tags: n.tags || [],
     note: n.note || "",
     memo_count: (n.regions || []).length,
@@ -156,6 +157,16 @@ const TOOLS = [
     name: "list_tags",
     description: "쓰이고 있는 태그 전부를 카테고리·사용 횟수와 함께 본다.",
     inputSchema: S({}),
+  },
+  {
+    name: "list_spaces",
+    description: "공간(여러 장을 묶은 자리) 목록을 본다. 이름·메모와 객관 정보인 '사실'까지.",
+    inputSchema: S({}),
+  },
+  {
+    name: "set_space",
+    description: "사진을 어느 공간에 넣는다. 없는 이름이면 새로 만든다. 빈 값이면 묶음에서 뺀다.",
+    inputSchema: S({ id: str("사진 id"), space: str("공간 이름 (빈 문자열이면 해제)") }, ["id", "space"]),
   },
   {
     name: "stats",
@@ -295,6 +306,7 @@ const IMPL = {
       photos: notes.length,
       memos: notes.reduce((s, n) => s + (n.regions || []).length, 0),
       tags: tags.length,
+      spaces: new Set(notes.map((n) => n.space).filter(Boolean)).size,
       untagged: notes.filter((n) => allTagNames(n).size === 0).length,
       top_tags: tags.slice(0, 15),
       frequent_pairs: [...pair.entries()]
@@ -303,6 +315,42 @@ const IMPL = {
         .slice(0, 12)
         .map(([k, c]) => ({ pair: k, count: c })),
       newest: notes[0] ? brief(notes[0]) : null,
+    };
+  },
+
+  list_spaces() {
+    const meta = readJSON(join(VAULT, "spaces.json"), null);
+    const declared = new Map(
+      ((meta && meta.spaces) || []).map((sp) => [sp.name, sp]));
+    const count = new Map();
+    for (const n of readNotes())
+      if (n.space) count.set(n.space, (count.get(n.space) || 0) + 1);
+    const names = new Set([...count.keys(), ...declared.keys()]);
+    return {
+      total: names.size,
+      spaces: [...names].sort((a, b) => a.localeCompare(b, "ko")).map((name) => {
+        const d = declared.get(name) || {};
+        return {
+          name,
+          photos: count.get(name) || 0,
+          note: d.note || "",
+          facts: (d.facts || []).map((f) => ({ [f.k]: f.v })),
+        };
+      }),
+    };
+  },
+
+  set_space(a) {
+    const n = mustRead(a.id);
+    const name = String(a.space || "").trim().replace(/\s+/g, " ");
+    n.space = name || null;
+    writeNote(n);
+    return {
+      id: n.id,
+      space: n.space,
+      note: name
+        ? "앱이 20초 안에 반영합니다. 새 이름이면 공간이 새로 생깁니다."
+        : "묶음에서 뺐습니다.",
     };
   },
 
@@ -384,6 +432,7 @@ const IMPL = {
         "---",
         "title: " + JSON.stringify(n.title || ""),
         "date: " + date,
+        "space: " + JSON.stringify(n.space || ""),
         "tags: [" + (n.tags || []).map((t) => JSON.stringify(t)).join(", ") + "]",
         "gusuk_id: " + n.id,
         "---",
