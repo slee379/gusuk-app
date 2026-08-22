@@ -365,6 +365,30 @@ button{background:none;border:0;padding:0;cursor:pointer}
   font-size:13px;line-height:1.6;padding:0;min-height:22px}
 .rgitem textarea::placeholder{color:var(--faint)}
 
+/* ── 마술봉 (자동 면 선택) ───────────────────────────── */
+.layer.wand{cursor:crosshair}
+.rg.poly{border-radius:0}
+.rg.preview{
+  border:1.5px solid var(--accent);background:var(--accent-mid);
+  pointer-events:none;animation:none;
+}
+.rg.preview .num,.rg.preview .h{display:none}
+.wandbar{
+  position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
+  display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:4px;
+  background:color-mix(in srgb,var(--card) 94%,transparent);
+  border:1px solid var(--line-2);box-shadow:var(--shadow-lift);
+  backdrop-filter:blur(8px);max-width:calc(100% - 32px);
+}
+.wandbar .slider{width:130px;flex:none}
+.wandbar #wandInfo{min-width:34px;text-align:right}
+.wandbar .btn{height:28px;padding:0 10px}
+@media (max-width:820px){
+  .wandbar{left:8px;right:8px;transform:none;bottom:10px;
+    flex-wrap:wrap;justify-content:flex-end;gap:8px}
+  .wandbar .slider{flex:1;width:auto;min-width:90px}
+}
+
 /* ── 공간 (여러 장을 한 자리로 묶기) ─────────────────── */
 .card.space .stack{position:relative;display:block}
 .card.space .stack::before,
@@ -1086,7 +1110,8 @@ function regionCardHTML(o){
   const memo=o.r.text? '<div class="memo">'+esc(o.r.text)+'</div>' : '<div class="memo none">메모 없음</div>';
   return '<article class="card" data-open="'+o.it.id+'" data-rgsel="'+o.r.id+'" tabindex="0">'+
     '<div class="pins">'+(o.i+1)+'</div>'+
-    '<div class="crop" style="'+cropStyle(o.it,o.r)+'"></div>'+
+    '<div class="crop" style="'+cropStyle(o.it,o.r)+
+      ((o.r.path&&o.r.path.length>2)?';clip-path:'+pathToClip(o.r.path):"")+'"></div>'+
     '<div class="meta">'+memo+(tg?'<div class="row">'+tg+'</div>':"")+
     '<div class="from">'+esc(o.it.title||"제목 없음")+'</div></div></article>';
 }
@@ -1270,7 +1295,11 @@ function noteFromItem(it){
     title:it.title||"",note:it.note||"",
     space:sp?sp.name:null,   /* id 가 아니라 이름으로 — 태그와 같은 이유 */
     tags:tagNames(it.tags),
-    regions:(it.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:tagNames(r.tags)})),
+    regions:(it.regions||[]).map(r=>{
+      const o={id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:tagNames(r.tags)};
+      if(r.path&&r.path.length>2) o.path=r.path;   /* 자동 선택한 면의 윤곽 */
+      return o;
+    }),
     links:it.links||[],
     image:it.img?{file:it.img.file||null,w:it.img.w,h:it.img.h}:null,
     createdAt:it.createdAt,updatedAt:it.updatedAt||Date.now()};
@@ -1280,7 +1309,8 @@ function itemFromNote(d){
   return {id:d.id,title:d.title||"",note:d.note||"",
     space:sp?sp.id:null,
     tags:tagIds(d.tags),
-    regions:(d.regions||[]).map(r=>({id:r.id,x:+r.x,y:+r.y,w:+r.w,h:+r.h,text:r.text||"",tags:tagIds(r.tags)})),
+    regions:(d.regions||[]).map(r=>({id:r.id,x:+r.x,y:+r.y,w:+r.w,h:+r.h,text:r.text||"",
+      path:Array.isArray(r.path)?r.path:null,tags:tagIds(r.tags)})),
     links:Array.isArray(d.links)?d.links:[],
     img:{key:d.id,file:(d.image&&d.image.file)||null,w:(d.image&&d.image.w)||3,h:(d.image&&d.image.h)||2},
     createdAt:d.createdAt||Date.now(),updatedAt:d.updatedAt||0};
@@ -1720,6 +1750,188 @@ function wireVault(){
 /* ══ 태그 입력 필드 ═══════════════════════════════════ */
 const ICON_X='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>';
 
+/* ══ 마술봉 — 색이 이어지는 면을 따낸다 ══════════════════════
+   사물 인식이 아니라 색의 연속을 따라간다. 벽, 상판, 목재 패널처럼
+   "면"을 잡는 데 강하다. 모델을 받지 않으므로 오프라인·즉시 동작한다.
+
+   흐름: 축소 → 클릭한 색과 비슷한 곳으로 번지기(flood fill)
+        → 테두리 따기(marching squares) → 점 줄이기 → 다각형 */
+const WAND_MAX = 340;   // 작업용 축소 한 변
+let wandPx = null;      // {key,w,h,data} — 같은 사진이면 재사용
+
+function wandPixels(im){
+  const key=im.currentSrc||im.src;
+  if(wandPx&&wandPx.key===key) return wandPx;
+  const nw=im.naturalWidth, nh=im.naturalHeight;
+  if(!nw||!nh) return null;
+  const sc=Math.min(1,WAND_MAX/Math.max(nw,nh));
+  const w=Math.max(1,Math.round(nw*sc)), h=Math.max(1,Math.round(nh*sc));
+  const c=document.createElement("canvas"); c.width=w; c.height=h;
+  const g=c.getContext("2d",{willReadFrequently:true});
+  let data;
+  try{ g.drawImage(im,0,0,w,h); data=g.getImageData(0,0,w,h).data; }
+  catch(e){ return null; }
+  wandPx={key:key,w:w,h:h,data:data};
+  return wandPx;
+}
+
+/* 클릭한 색에서 시작해 비슷한 이웃으로 번진다 */
+function floodMask(px,sx,sy,tol){
+  const w=px.w,h=px.h,d=px.data;
+  const seed=(sy*w+sx)*4;
+  const r0=d[seed],g0=d[seed+1],b0=d[seed+2];
+  const mask=new Uint8Array(w*h);
+  const stack=new Int32Array(w*h);
+  let top=0;
+  const t2=tol*tol;
+  stack[top++]=sy*w+sx; mask[sy*w+sx]=1;
+  while(top>0){
+    const p=stack[--top];
+    const x=p%w, y=(p-x)/w;
+    /* 상하좌우 4방향 */
+    if(x>0) push(p-1);
+    if(x<w-1) push(p+1);
+    if(y>0) push(p-w);
+    if(y<h-1) push(p+w);
+    function push(np){
+      if(mask[np]) return;
+      const i=np*4;
+      const dr=d[i]-r0, dg=d[i+1]-g0, db=d[i+2]-b0;
+      if(dr*dr+dg*dg+db*db>t2) return;
+      mask[np]=1; stack[top++]=np;
+    }
+  }
+  return mask;
+}
+
+/* 티끌 구멍 메우기 — 사방이 채워진 빈 칸은 채운다 */
+function fillPinholes(mask,w,h){
+  const out=mask.slice();
+  for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+    const p=y*w+x;
+    if(mask[p]) continue;
+    if(mask[p-1]&&mask[p+1]&&mask[p-w]&&mask[p+w]) out[p]=1;
+  }
+  return out;
+}
+
+/* 클릭한 점이 속한 덩어리만 남긴다 (멀리 떨어진 같은 색은 버린다) */
+function keepBlob(mask,w,h,sx,sy){
+  const out=new Uint8Array(w*h);
+  const stack=[sy*w+sx];
+  if(!mask[sy*w+sx]) return out;
+  out[sy*w+sx]=1;
+  while(stack.length){
+    const p=stack.pop();
+    const x=p%w, y=(p-x)/w;
+    const nb=[];
+    if(x>0) nb.push(p-1);
+    if(x<w-1) nb.push(p+1);
+    if(y>0) nb.push(p-w);
+    if(y<h-1) nb.push(p+w);
+    for(const np of nb) if(mask[np]&&!out[np]){ out[np]=1; stack.push(np); }
+  }
+  return out;
+}
+
+/* marching squares — 마스크의 바깥 테두리를 한 바퀴 따라간다 */
+function traceContour(mask,w,h){
+  const at=(x,y)=>(x<0||y<0||x>=w||y>=h)?0:mask[y*w+x];
+  let sx=-1,sy=-1;
+  for(let y=0;y<h&&sx<0;y++) for(let x=0;x<w;x++) if(mask[y*w+x]){sx=x;sy=y;break;}
+  if(sx<0) return null;
+  const pts=[];
+  let px=sx, py=sy, dir="", guard=0, limit=(w+h)*8+2000;
+  const startX=px, startY=py;
+  do{
+    const tl=at(px-1,py-1), tr=at(px,py-1), bl=at(px-1,py), br=at(px,py);
+    const st=(tl?8:0)|(tr?4:0)|(br?2:0)|(bl?1:0);
+    let nd;
+    switch(st){
+      case 1: nd="down"; break;
+      case 2: nd="right"; break;
+      case 3: nd="right"; break;
+      case 4: nd="up"; break;
+      case 5: nd=(dir==="right")?"up":"down"; break;
+      case 6: nd="up"; break;
+      case 7: nd="up"; break;
+      case 8: nd="left"; break;
+      case 9: nd="down"; break;
+      case 10: nd=(dir==="up")?"left":"right"; break;
+      case 11: nd="right"; break;
+      case 12: nd="left"; break;
+      case 13: nd="down"; break;
+      case 14: nd="left"; break;
+      default: return null;
+    }
+    pts.push([px,py]);
+    if(nd==="up") py--; else if(nd==="down") py++;
+    else if(nd==="left") px--; else px++;
+    dir=nd;
+  }while((px!==startX||py!==startY)&&++guard<limit);
+  return pts.length>3?pts:null;
+}
+
+/* 점 줄이기 (Douglas-Peucker) — 수백 개를 수십 개로 */
+function simplify(pts,eps){
+  if(pts.length<4) return pts;
+  const keep=new Uint8Array(pts.length);
+  keep[0]=keep[pts.length-1]=1;
+  const stack=[[0,pts.length-1]];
+  while(stack.length){
+    const [a,b]=stack.pop();
+    if(b<=a+1) continue;
+    const [ax,ay]=pts[a], [bx,by]=pts[b];
+    const dx=bx-ax, dy=by-ay;
+    const len=Math.hypot(dx,dy)||1;
+    let far=-1, fd=eps;
+    for(let i=a+1;i<b;i++){
+      const d=Math.abs((pts[i][0]-ax)*dy-(pts[i][1]-ay)*dx)/len;
+      if(d>fd){ fd=d; far=i; }
+    }
+    if(far>0){ keep[far]=1; stack.push([a,far],[far,b]); }
+  }
+  return pts.filter((_,i)=>keep[i]);
+}
+
+/* 클릭 지점(0~1 비율) → 다각형 영역. 못 찾으면 null */
+function wandSelect(im,fx,fy,tol){
+  const px=wandPixels(im); if(!px) return null;
+  const sx=clamp(Math.round(fx*px.w),0,px.w-1);
+  const sy=clamp(Math.round(fy*px.h),0,px.h-1);
+  let mask=floodMask(px,sx,sy,tol);
+  mask=fillPinholes(mask,px.w,px.h);
+  mask=keepBlob(mask,px.w,px.h,sx,sy);
+
+  let n=0; for(let i=0;i<mask.length;i++) n+=mask[i];
+  if(n<12) return null;                       /* 너무 작다 */
+  const share=n/(px.w*px.h);
+
+  const raw=traceContour(mask,px.w,px.h);
+  if(!raw) return null;
+  const pts=simplify(raw,1.1);
+  if(pts.length<3) return null;
+
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const [x,y] of pts){
+    if(x<x0)x0=x; if(y<y0)y0=y;
+    if(x>x1)x1=x; if(y>y1)y1=y;
+  }
+  const bw=Math.max(1,x1-x0), bh=Math.max(1,y1-y0);
+  return {
+    /* 사진 전체 기준 경계상자 (0~1) — 기존 형식 그대로 */
+    x:x0/px.w, y:y0/px.h, w:bw/px.w, h:bh/px.h,
+    /* 경계상자 기준 다각형 (0~100 %) — clip-path 로 그린다 */
+    path:pts.map(([x,y])=>[
+      +(((x-x0)/bw)*100).toFixed(2),
+      +(((y-y0)/bh)*100).toFixed(2)]),
+    share:share
+  };
+}
+function pathToClip(path){
+  return "polygon("+path.map(p=>p[0]+"% "+p[1]+"%").join(",")+")";
+}
+
 /* ══ 사진에서 색 읽기 ══════════════════════════════════════
    기기 안에서만 돈다. 사진은 어디로도 나가지 않는다.
 
@@ -1971,19 +2183,34 @@ function TagField(host,getIds,setIds,placeholder){
 
 /* ══ 상세 화면 ════════════════════════════════════════ */
 let CUR=null, SEL=null, DRAW=false, sheetEl=null;
+let TOOL="rect";    /* rect = 드래그해서 네모, wand = 눌러서 면 자동 선택 */
+let WANDSEL=null;   /* 미리보기 중인 자동 선택 결과 */
+/* 아래 셋은 wireSheet 안에서 채워진다 (레이어 요소가 그때 생기므로) */
+let runWand=()=>{}, clearWand=()=>{}, commitWand=()=>{};
 
 function sheetHTML(){
   return '<div class="sheet-bar">'+
     '<button class="icon-btn" id="shClose" title="닫기 (Esc)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5 5 8l4.5 4.5"/></svg></button>'+
     '<span class="lbl" id="shPos"></span>'+
     '<div style="flex:1"></div>'+
-    '<button class="btn" id="shDraw"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1" stroke-dasharray="2.4 1.8"/></svg>좋아하는 부분 표시</button>'+
+    '<span class="lbl only-desktop" style="margin-right:2px">좋아하는 부분</span>'+
+    '<div class="switch sm" id="shTools" role="tablist" aria-label="부분 표시 방법">'+
+      '<button role="tab" data-tool="rect" aria-selected="false" title="드래그해서 네모로">네모로</button>'+
+      '<button role="tab" data-tool="wand" aria-selected="false" title="누른 곳의 면을 자동으로">자동으로</button>'+
+    '</div>'+
     '<button class="icon-btn" id="shPrev" title="이전 (←)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5 5 8l4.5 4.5"/></svg></button>'+
     '<button class="icon-btn" id="shNext" title="다음 (→)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5 11 8l-4.5 4.5"/></svg></button>'+
     '<button class="icon-btn" id="shDel" title="이 사진 지우기"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></button>'+
   '</div>'+
   '<div class="stage" id="stage"><div class="frame" id="frame"><img id="shImg" alt=""><div class="layer" id="layer"></div></div>'+
-    '<div class="stage-hint" id="hint" hidden></div></div>'+
+    '<div class="stage-hint" id="hint" hidden></div>'+
+    '<div class="wandbar" id="wandbar" hidden>'+
+      '<span class="lbl">잡는 범위</span>'+
+      '<input class="slider" type="range" id="wandTol" min="12" max="110" step="2" value="42">'+
+      '<span class="lbl mono" id="wandInfo"></span>'+
+      '<button class="btn" id="wandCancel">취소</button>'+
+      '<button class="btn primary" id="wandOk">이대로 담기</button>'+
+    '</div></div>'+
   '<aside class="panel" id="panel">'+
     '<div class="grp"><textarea class="ttl" id="pTitle" rows="1" placeholder="제목 없음"></textarea>'+
       '<div class="date mono" id="pDate"></div></div>'+
@@ -2052,12 +2279,16 @@ function fitFrame(){
 }
 function updateDrawUI(){
   if(!sheetEl) return;
-  const layer=sheetEl.querySelector("#layer"), btn=sheetEl.querySelector("#shDraw"), hint=sheetEl.querySelector("#hint");
-  layer.classList.toggle("draw",DRAW);
-  btn.classList.toggle("primary",DRAW);
+  const layer=sheetEl.querySelector("#layer"), hint=sheetEl.querySelector("#hint");
+  layer.classList.toggle("draw",DRAW&&TOOL==="rect");
+  layer.classList.toggle("wand",DRAW&&TOOL==="wand");
+  sheetEl.querySelectorAll("#shTools button").forEach(b=>
+    b.setAttribute("aria-selected",(DRAW&&b.dataset.tool===TOOL)?"true":"false"));
   if(DRAW){
-    hint.hidden=false;
-    hint.textContent="좋았던 부분을 드래그해서 감싸주세요";
+    hint.hidden=!!WANDSEL;
+    hint.textContent = TOOL==="wand"
+      ? "담고 싶은 면을 눌러보세요 — 색이 이어지는 만큼 잡습니다"
+      : "좋았던 부분을 드래그해서 감싸주세요";
   }else if(SEL){
     hint.hidden=false;
     hint.textContent="모서리를 끌면 크기 조절 · 안쪽을 끌면 이동";
@@ -2167,7 +2398,12 @@ function renderRegions(){
   if(!CUR) return;
   const layer=sheetEl.querySelector("#layer");
   const rs=CUR.regions||[];
-  layer.innerHTML=rs.map((r,i)=>'<div class="rg'+(SEL===r.id?" on":"")+'" data-rg="'+r.id+'" style="left:'+(r.x*100)+'%;top:'+(r.y*100)+'%;width:'+(r.w*100)+'%;height:'+(r.h*100)+'%"><span class="num">'+(i+1)+'</span>'+HANDLES+'</div>').join("");
+  layer.innerHTML=rs.map((r,i)=>{
+    const clip=(r.path&&r.path.length>2)?';clip-path:'+pathToClip(r.path):'';
+    return '<div class="rg'+(SEL===r.id?" on":"")+(clip?" poly":"")+'" data-rg="'+r.id+'"'+
+      ' style="left:'+(r.x*100)+'%;top:'+(r.y*100)+'%;width:'+(r.w*100)+'%;height:'+(r.h*100)+'%'+clip+'">'+
+      '<span class="num">'+(i+1)+'</span>'+HANDLES+'</div>';
+  }).join("");
   const box=sheetEl.querySelector("#pRegions");
   sheetEl.querySelector("#pRgN").textContent=rs.length?rs.length+"개":"";
   if(!rs.length){
@@ -2216,7 +2452,18 @@ function wireSheet(){
   sheetEl.querySelector("#shClose").addEventListener("click",closeSheet);
   sheetEl.querySelector("#shPrev").addEventListener("click",()=>stepItem(-1));
   sheetEl.querySelector("#shNext").addEventListener("click",()=>stepItem(1));
-  sheetEl.querySelector("#shDraw").addEventListener("click",()=>{DRAW=!DRAW;updateDrawUI();});
+  sheetEl.querySelectorAll("#shTools button").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const t=b.dataset.tool;
+      if(DRAW&&TOOL===t){ DRAW=false; }        /* 같은 걸 또 누르면 끈다 */
+      else { DRAW=true; TOOL=t; }
+      clearWand();
+      updateDrawUI();
+    });
+  });
+  sheetEl.querySelector("#wandTol").addEventListener("input",()=>runWand());
+  sheetEl.querySelector("#wandCancel").addEventListener("click",()=>{ clearWand(); updateDrawUI(); });
+  sheetEl.querySelector("#wandOk").addEventListener("click",()=>commitWand());
   sheetEl.querySelector("#shDel").addEventListener("click",()=>{
     if(!CUR) return;
     const id=CUR.id;
@@ -2240,6 +2487,56 @@ function wireSheet(){
     const go=e.target.closest("[data-goto]");
     if(go) openItem(go.dataset.goto);
   });
+
+  /* ── 마술봉: 누른 면을 미리 보여주고, 범위를 조절해 담는다 ── */
+  let wandAt=null;   /* 마지막으로 누른 지점 (0~1) */
+  runWand=()=>{
+    if(!wandAt||!CUR) return;
+    const im=sheetEl.querySelector("#shImg");
+    const tol=+sheetEl.querySelector("#wandTol").value;
+    const res=wandSelect(im,wandAt.x,wandAt.y,tol);
+    const bar=sheetEl.querySelector("#wandbar");
+    const info=sheetEl.querySelector("#wandInfo");
+    let prev=layer.querySelector(".rg.preview");
+    if(!res){
+      WANDSEL=null;
+      if(prev) prev.remove();
+      info.textContent="잡히지 않음";
+      bar.hidden=false;
+      return;
+    }
+    WANDSEL=res;
+    if(!prev){
+      prev=document.createElement("div");
+      prev.className="rg preview";
+      layer.appendChild(prev);
+    }
+    prev.style.left=res.x*100+"%"; prev.style.top=res.y*100+"%";
+    prev.style.width=res.w*100+"%"; prev.style.height=res.h*100+"%";
+    prev.style.clipPath=pathToClip(res.path);
+    info.textContent=Math.round(res.share*100)+"%";
+    bar.hidden=false;
+    hintOff();
+  };
+  clearWand=()=>{
+    WANDSEL=null; wandAt=null;
+    const prev=layer.querySelector(".rg.preview"); if(prev) prev.remove();
+    const bar=sheetEl&&sheetEl.querySelector("#wandbar"); if(bar) bar.hidden=true;
+  };
+  commitWand=()=>{
+    if(!WANDSEL||!CUR) return;
+    const r=WANDSEL;
+    const rg={id:uid("r"),
+      x:+r.x.toFixed(4),y:+r.y.toFixed(4),w:+r.w.toFixed(4),h:+r.h.toFixed(4),
+      path:r.path, text:"", tags:[]};
+    CUR.regions=(CUR.regions||[]).concat([rg]);
+    SEL=rg.id; DRAW=false;
+    clearWand();
+    save(CUR); renderRegions(); updateDrawUI(); graphDirty();
+    const ta=sheetEl.querySelector('[data-rgtext="'+rg.id+'"]');
+    if(ta){ ta.scrollIntoView({block:"nearest"}); ta.focus(); }
+  };
+  function hintOff(){ const h=sheetEl.querySelector("#hint"); if(h) h.hidden=true; }
 
   /* 영역 드래그 */
   let start=null, mq=null;
@@ -2309,8 +2606,16 @@ function wireSheet(){
       return;
     }
     if(e.button!==0) return;
+    const box=layer.getBoundingClientRect();
+    if(TOOL==="wand"){
+      wandAt={x:clamp((e.clientX-box.left)/box.width,0,1),
+              y:clamp((e.clientY-box.top)/box.height,0,1)};
+      runWand();
+      e.preventDefault();
+      return;
+    }
     layer.setPointerCapture(e.pointerId);
-    const r=layer.getBoundingClientRect();
+    const r=box;
     start={x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp((e.clientY-r.top)/r.height,0,1)};
     mq=document.createElement("div"); mq.className="marquee"; layer.appendChild(mq);
     e.preventDefault();
@@ -2814,7 +3119,8 @@ async function importFiles(files){
         id:rec.id,title:rec.title||"",note:rec.note||"",
         space:rec.space?(spmap.get(rec.space)||null):null,
         tags:fix(rec.tags),
-        regions:(rec.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:fix(r.tags)})),
+        regions:(rec.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",
+          path:Array.isArray(r.path)?r.path:null,tags:fix(r.tags)})),
         links:rec.links||[],
         img:null,
         createdAt:rec.createdAt||Date.now(), updatedAt:Date.now()
