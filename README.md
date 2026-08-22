@@ -1,11 +1,14 @@
 # 좋아하는 구석 — 독립 실행 앱(PWA)
 
+**→ https://slee379.github.io/gusuk-app/**
+
 Claude 아티팩트에서 떼어내, 컴퓨터와 폰 양쪽에 설치해 쓰는 웹앱.
 사진과 메모는 **서버에 올라가지 않는다.** 웹에는 앱 껍데기만 올라간다.
 
 ```
 gusuk-app/
 ├ index.html              앱 본체 — 이 파일이 원본(master)이다
+├ privacy.html            개인정보처리방침 (구글 OAuth 게시에 필요)
 ├ manifest.webmanifest    앱 이름·아이콘·설치 정보
 ├ sw.js                   서비스 워커 (오프라인 실행). VERSION 은 자동 갱신됨
 ├ icons/                  홈 화면 아이콘 4종
@@ -57,7 +60,7 @@ node tools/import-artifact.mjs <받은HTML경로>
 
 | | 무엇 | 바꾸면 생기는 일 |
 |---|---|---|
-| 1 | **주소의 도메인** (`아이디.github.io`) | 브라우저 저장소는 도메인 단위다. 도메인이 바뀌면 **그 기기의 기록이 안 보인다.** 커스텀 도메인을 붙일 생각이면 사진을 넣기 전에 정하고, 이미 넣었다면 반드시 `백업 저장` → 새 주소에서 `불러오기` |
+| 1 | **주소의 도메인** (`slee379.github.io`) | 브라우저 저장소는 도메인 단위다. 도메인이 바뀌면 **그 기기의 기록이 안 보인다.** 커스텀 도메인을 붙일 생각이면 사진을 넣기 전에 정하고, 이미 넣었다면 반드시 `백업 저장` → 새 주소에서 `불러오기` |
 | 2 | `index.html` 의 `DB_NAME = "gusuk-archive"` | 저장소 이름이 바뀌어 기존 기록을 못 찾는다 |
 | 3 | `manifest.webmanifest` 의 `"id"` | 설치된 앱이 별개 앱으로 인식돼 홈 화면에 하나 더 생긴다 |
 | 4 | 백업 JSON 의 `app:"gusuk"` / `v:1` 형식 | 예전에 저장해둔 백업 파일을 못 읽게 된다 |
@@ -119,6 +122,19 @@ node tools/import-artifact.mjs <받은HTML경로>
 | Windows/Mac Chrome·Edge | 주소창 오른쪽 설치(⊕) 아이콘 |
 | 아이폰 | **Safari 로 열고** 공유 → 홈 화면에 추가 |
 | 안드로이드 Chrome | 메뉴 → 앱 설치 |
+
+## 호스팅
+
+GitHub Pages. 설정은 이미 끝나 있다.
+
+| | |
+|---|---|
+| 저장소 | https://github.com/slee379/gusuk-app |
+| 공개 주소 | https://slee379.github.io/gusuk-app/ |
+| Pages 소스 | `main` 브랜치 / `(root)` |
+
+**HTTPS 가 필수다** — 서비스 워커와 앱 설치는 https(또는 localhost)에서만 동작한다.
+`_backup/` 은 `.gitignore` 로 빠지고, `.nojekyll` 이 있어 Jekyll 처리를 건너뛴다.
 
 ## 로컬에서 확인
 
