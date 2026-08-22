@@ -1,0 +1,8 @@
+# import-artifact.mjs 가 남기는 이전 버전 사본.
+# git 히스토리에 이미 남으므로 올릴 필요 없다.
+_backup/
+
+# OS 부스러기
+Thumbs.db
+.DS_Store
+desktop.ini
