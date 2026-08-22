@@ -27,6 +27,7 @@ const TRACKED = [
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
   "icons/apple-touch-icon-180.png",
+  "icons/favicon-32.png",
 ];
 
 const h = createHash("sha256");

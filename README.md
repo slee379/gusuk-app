@@ -11,12 +11,27 @@ gusuk-app/
 ├ privacy.html            개인정보처리방침 (구글 OAuth 게시에 필요)
 ├ manifest.webmanifest    앱 이름·아이콘·설치 정보
 ├ sw.js                   서비스 워커 (오프라인 실행). VERSION 은 자동 갱신됨
-├ icons/                  홈 화면 아이콘 4종
+├ icons/                  홈 화면 아이콘 (make-icons.mjs 가 생성 — 직접 고치지 말 것)
 ├ deploy.ps1              배포 한 방
 └ tools/
    ├ sync-version.mjs     sw.js 버전 자동 갱신
+   ├ make-icons.mjs       아이콘 생성 (색·형태를 바꾸고 다시 돌리면 전부 재생성)
    └ import-artifact.mjs  Claude 아티팩트 HTML 을 이 앱으로 들여올 때만 사용
 ```
+
+## 아이콘
+
+에두아르도 칠리다의 동판화에서 가져온 형태 — 따뜻한 종이 바탕에 먹빛,
+서로 떨어진 네 덩어리와 그 사이의 흰 고랑. 왼쪽아래에 비워둔 자리가 "구석"이다.
+
+색이나 형태를 바꾸려면 [`tools/make-icons.mjs`](tools/make-icons.mjs) 위쪽의
+`PAPER` / `INK` / `SHAPES` 만 고치고 다시 돌리면 된다.
+
+```bash
+node tools/make-icons.mjs
+```
+
+`icons/` 안의 PNG 를 직접 고치지 마라. 다음 생성 때 덮어써진다.
 
 ---
 
