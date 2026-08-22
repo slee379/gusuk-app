@@ -2032,6 +2032,12 @@ function nodeAt(px,py){
   }
   return null;
 }
+/* 짧게 누르면 열고, 끌거나 길게 누르면 옮기기만 한다.
+   노드를 옮기려고 끌었을 뿐인데 사진이 열려버리는 걸 막는다. */
+const TAP_SLOP=6;   // 이만큼(px) 넘게 움직이면 "옮기려던 것"
+const TAP_MS=500;   // 이보다 오래 누르고 있었으면 "옮기려던 것"
+let press=null;
+
 function wireGraph(){
   cv=$("#cv"); ctx=cv.getContext("2d");
   const tip=$("#gtip");
@@ -2039,16 +2045,23 @@ function wireGraph(){
   cv.addEventListener("pointerdown",e=>{
     const r=rect(), px=e.clientX-r.left, py=e.clientY-r.top;
     const n=nodeAt(px,py);
-    cv.setPointerCapture(e.pointerId);
+    /* press 를 먼저 세운다. 캡처가 실패해도 탭/드래그 구분은 살아 있어야 한다. */
+    press={x:e.clientX,y:e.clientY,t:Date.now(),moved:false,used:false};
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
     if(n){ dragN=n; n.grabbed={dx:0,dy:0}; alpha=Math.max(alpha,.35); }
     else { panning={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; cv.classList.add("drag"); }
     kick();
   });
   cv.addEventListener("pointermove",e=>{
     const r=rect(), px=e.clientX-r.left, py=e.clientY-r.top;
+    if(press&&!press.moved){
+      const dx=e.clientX-press.x, dy=e.clientY-press.y;
+      if(dx*dx+dy*dy > TAP_SLOP*TAP_SLOP) press.moved=true;
+    }
     if(dragN){
       const p=toWorld(px,py);
       dragN.x=p.x; dragN.y=p.y; dragN.vx=dragN.vy=0;
+      cv.style.cursor="grabbing";   /* 옮기는 중이라는 신호 */
       alpha=Math.max(alpha,.3); kick(); return;
     }
     if(panning){
@@ -2073,13 +2086,21 @@ function wireGraph(){
   });
   const end=e=>{
     try{cv.releasePointerCapture(e.pointerId);}catch(_){}
-    if(dragN){ dragN=null; alpha=Math.max(alpha,.25); }
+    if(dragN){ dragN=null; alpha=Math.max(alpha,.25); cv.style.cursor="pointer"; }
     panning=null; cv.classList.remove("drag"); kick();
   };
   cv.addEventListener("pointerup",end);
   cv.addEventListener("pointercancel",end);
   cv.addEventListener("pointerleave",()=>{hoverN=null;$("#gtip").hidden=true;kick();});
   cv.addEventListener("click",e=>{
+    /* 끌어서 옮겼거나 오래 누르고 있었으면 열지 않는다 —
+       위치만 바꾸려던 것이지 들어가려던 게 아니다. */
+    const p=press;
+    if(!p||p.used) return;
+    p.used=true;
+    if(p.moved) return;
+    if(Date.now()-p.t > TAP_MS) return;
+
     const r=rect(); const n=nodeAt(e.clientX-r.left,e.clientY-r.top);
     if(!n) return;
     if(n.type==="item") openItem(n.ref.id);

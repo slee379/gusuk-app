@@ -26,13 +26,19 @@ const INK = [0x1b, 0x1c, 0x1a]; // 부드러운 먹빛 (순수 검정은 너무 
    서로 떨어진 네 덩어리. 사이의 흰 고랑과 왼쪽아래에 비워둔 여백이
    형태만큼이나 중요하다 — 비워둔 그 자리가 "구석"이다. */
 const GRID = 24;
-const GUT = 2.5; // 덩어리 사이 흰 고랑의 폭
 const SHAPES = [
   [0, 0, 11, 11], // 왼쪽위 큰 사각
   [13.5, 0, 24, 17], // 오른쪽 긴 기둥
   [0, 13.5, 5, 19.5], // 왼쪽아래 작은 사각
   [7.5, 19.5, 24, 24], // 아래 가로 보
 ];
+
+/* ── 몽글함 ────────────────────────────────────────────────
+   ROUND  모서리 둥글기 (그리드 칸 단위). 0 이면 각진 사각.
+   SWELL  가장자리가 물결처럼 부푸는 정도 — 판에 잉크가 번진 느낌.
+   덩어리가 작을수록 둥글기를 줄여야 알약처럼 되지 않는다. */
+const ROUND = 2.6;
+const SWELL = 0.16;
 
 /* 작은 크기에서는 흰 채널이 뭉개진다. 그래서 마크를 키워 여백을 줄인다. */
 const spanFor = (size) => (size >= 128 ? 0.54 : 0.76);
@@ -55,8 +61,19 @@ function makeNoise(seed) {
   };
 }
 
-/* ── 렌더 ──────────────────────────────────────────────── */
-const SS = 4; // 수퍼샘플링 배수 (가장자리를 매끄럽게)
+/* ── 렌더 ──────────────────────────────────────────────────
+   각 덩어리를 "둥근 사각형까지의 거리"로 표현한다. 거리를 알면
+   가장자리를 부드럽게 깎을 수 있고, 거리에 잡음을 더하면
+   테두리가 물결치며 부푼다 — 잉크가 번진 것처럼. */
+function sdRoundBox(px, py, cx, cy, hx, hy, r) {
+  const qx = Math.abs(px - cx) - (hx - r);
+  const qy = Math.abs(py - cy) - (hy - r);
+  const ax = qx > 0 ? qx : 0;
+  const ay = qy > 0 ? qy : 0;
+  const outer = Math.sqrt(ax * ax + ay * ay);
+  const inner = Math.min(Math.max(qx, qy), 0);
+  return outer + inner - r;
+}
 
 function render(size) {
   const span = spanFor(size) * size;
@@ -64,42 +81,48 @@ function render(size) {
   const ox = (size - span) / 2;
   const oy = (size - span) / 2;
 
-  // 그리드 좌표 → 픽셀 좌표
-  const rects = SHAPES.map(([x0, y0, x1, y1]) => [
-    ox + x0 * u, oy + y0 * u, ox + x1 * u, oy + y1 * u,
-  ]);
+  // 그리드 좌표 → 픽셀 좌표 + 덩어리마다 안전한 둥글기
+  const boxes = SHAPES.map(([x0, y0, x1, y1]) => {
+    const px0 = ox + x0 * u, py0 = oy + y0 * u;
+    const px1 = ox + x1 * u, py1 = oy + y1 * u;
+    const hx = (px1 - px0) / 2, hy = (py1 - py0) / 2;
+    // 짧은 변의 절반을 넘으면 알약이 되어버린다
+    const r = Math.min(ROUND * u, Math.min(hx, hy) * 0.92);
+    return { cx: (px0 + px1) / 2, cy: (py0 + py1) / 2, hx, hy, r };
+  });
 
   const grain = makeNoise(0x9e37);
   const blot = makeNoise(0x5bf1);
+  const wave = makeNoise(0x3c7d);
+  const swellPx = SWELL * u;
   const px = Buffer.alloc(size * size * 4);
-  const step = 1 / SS;
 
   for (let y = 0; y < size; y++) {
+    const py = y + 0.5;
     for (let x = 0; x < size; x++) {
-      // 커버리지 계산 (안티에일리어싱)
-      let hits = 0;
-      for (let sy = 0; sy < SS; sy++) {
-        const py = y + (sy + 0.5) * step;
-        for (let sx = 0; sx < SS; sx++) {
-          const pxx = x + (sx + 0.5) * step;
-          for (let r = 0; r < rects.length; r++) {
-            const t = rects[r];
-            if (pxx >= t[0] && pxx < t[2] && py >= t[1] && py < t[3]) { hits++; break; }
-          }
-        }
-      }
-      const a = hits / (SS * SS);
-
+      const pxx = x + 0.5;
       const u0 = x / size, v0 = y / size;
-      // 종이에는 미세한 결, 먹에는 판화 특유의 얼룩
-      const gr = grain(u0, v0) * 2.5;
-      const bl = blot(u0, v0) * 6;
+
+      let d = Infinity;
+      for (let b = 0; b < boxes.length; b++) {
+        const o = boxes[b];
+        const dd = sdRoundBox(pxx, py, o.cx, o.cy, o.hx, o.hy, o.r);
+        if (dd < d) d = dd;
+      }
+      d -= wave(u0, v0) * swellPx; // 가장자리를 물결지게 부풀린다
+
+      // 거리로부터 바로 커버리지를 얻는다 (부드러운 1px 가장자리)
+      let a = 0.5 - d;
+      a = a < 0 ? 0 : a > 1 ? 1 : a;
+
+      const gr = grain(u0, v0) * 2.5; // 종이결
+      const bl = blot(u0, v0) * 6; // 먹 얼룩
 
       const i = (y * size + x) * 4;
       for (let c = 0; c < 3; c++) {
         const paper = PAPER[c] + gr;
         const ink = INK[c] + bl;
-        let v = paper * (1 - a) + ink * a;
+        const v = paper * (1 - a) + ink * a;
         px[i + c] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
       }
       px[i + 3] = 255;
