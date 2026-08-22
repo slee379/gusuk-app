@@ -1,0 +1,6 @@
+# 줄바꿈을 LF 로 통일한다.
+# 안 그러면 윈도우에서 받을 때마다 파일 바이트가 달라져서
+# sync-version.mjs 가 계산하는 해시가 괜히 바뀐다.
+* text=auto eol=lf
+
+*.png binary
