@@ -334,6 +334,15 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .rgitem textarea{width:100%;border:0;background:none;resize:none;overflow:hidden;
   font-size:13px;line-height:1.6;padding:0;min-height:22px}
 .rgitem textarea::placeholder{color:var(--faint)}
+
+/* 사진에서 읽은 색 제안 */
+.autobox{margin-top:9px}
+.autohead{margin-bottom:6px}
+.autolist{display:flex;flex-wrap:wrap;gap:4px}
+.autolist .tg{border-style:dashed;color:var(--muted)}
+.autolist .tg:hover{border-style:solid;color:var(--ink);border-color:var(--accent-line)}
+.autolist .sw{width:11px;height:11px;border-radius:2px;flex:none;
+  border:1px solid rgba(21,24,28,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
 .thumbs{display:flex;flex-wrap:wrap;gap:7px}
 .thumb{width:60px;height:60px;border-radius:2px;overflow:hidden;border:1px solid var(--line);
   position:relative;background:var(--sunk);flex:none}
@@ -1430,6 +1439,156 @@ function wireVault(){
 /* ══ 태그 입력 필드 ═══════════════════════════════════ */
 const ICON_X='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>';
 
+/* ══ 사진에서 색 읽기 ══════════════════════════════════════
+   기기 안에서만 돈다. 사진은 어디로도 나가지 않는다.
+
+   할 수 있는 것: 주된 색, 전체 색온도(따뜻함/서늘함), 밝기
+   할 수 없는 것: 사물·재질·구조 (아치, 라임스톤, 고요함 …)
+                 그건 장면을 이해해야 하는 일이라 색 분석으로는 불가능하다.
+   결과는 메모리에만 둔다 — 백업 형식을 건드리지 않기 위해서. */
+const AUTO = new Map(); // item.id -> [{name,cat,hex}]
+
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (mx !== mn) {
+    const d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0));
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s * 100, l * 100];
+}
+const hex2 = n => ("0" + Math.round(clamp(n,0,255)).toString(16)).slice(-2);
+const toHex = c => "#" + hex2(c[0]) + hex2(c[1]) + hex2(c[2]);
+
+/* 색 하나에 이름을 붙인다. 이 앱이 쓰는 어휘에 맞춰 골랐다. */
+function nameColor(h, s, l, chroma) {
+  /* 아주 밝거나 어두운 색에서는 HSL 채도가 불안정하다.
+     (245,244,236) 같은 오프화이트가 채도 31% 로 튀어 "머스타드"가 되어버린다.
+     그래서 무채색 판정은 실제 채도(max-min)로 한다. */
+  if (chroma <= 20) {
+    if (l >= 84) return "오프화이트";
+    if (l <= 19) return "먹색";
+    return l >= 62 ? "연회색" : l >= 33 ? "중간 회색" : "짙은 회색";
+  }
+  if (l >= 90) return "오프화이트";
+  if (l <= 14) return "먹색";
+  if (h < 15 || h >= 345) return l < 40 ? "적갈" : "벽돌빛";
+  if (h < 33) return (l >= 60 && s <= 45) ? "뉴트럴 베이지" : "테라코타";
+  if (h < 48) return (l >= 68 && s <= 42) ? "뉴트럴 베이지" : (l >= 46 ? "머스타드" : "황토");
+  if (h < 72) return l < 56 ? "올리브" : "머스타드";
+  if (h < 100) return l < 48 ? "올리브" : "연둣빛";
+  if (h < 155) return l < 44 ? "딥그린" : "초록";
+  if (h < 196) return "청록";
+  if (h < 238) return l < 42 ? "네이비" : "하늘빛";
+  if (h < 272) return "푸른 보라";
+  if (h < 302) return "보라";
+  return "자주";
+}
+
+/* k-means 로 주된 색 몇 개를 뽑는다 */
+function dominant(px, k, iters) {
+  const n = px.length / 3;
+  const cen = [];
+  for (let i = 0; i < k; i++) {
+    const j = Math.floor((i + 0.5) * n / k) * 3;
+    cen.push([px[j], px[j + 1], px[j + 2]]);
+  }
+  const who = new Int32Array(n);
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < n; i++) {
+      let best = 0, bd = Infinity;
+      for (let c = 0; c < k; c++) {
+        const dr = px[i*3] - cen[c][0], dg = px[i*3+1] - cen[c][1], db = px[i*3+2] - cen[c][2];
+        const d = dr*dr + dg*dg + db*db;
+        if (d < bd) { bd = d; best = c; }
+      }
+      who[i] = best;
+    }
+    const sum = Array.from({length:k}, () => [0,0,0,0]);
+    for (let i = 0; i < n; i++) {
+      const c = who[i], s = sum[c];
+      s[0] += px[i*3]; s[1] += px[i*3+1]; s[2] += px[i*3+2]; s[3]++;
+    }
+    for (let c = 0; c < k; c++) {
+      if (sum[c][3]) cen[c] = [sum[c][0]/sum[c][3], sum[c][1]/sum[c][3], sum[c][2]/sum[c][3]];
+    }
+  }
+  const cnt = new Array(k).fill(0);
+  for (let i = 0; i < n; i++) cnt[who[i]]++;
+  return cen.map((c, i) => ({ rgb: c, share: cnt[i] / n }))
+            .sort((a, b) => b.share - a.share);
+}
+
+function analyzeImage(im) {
+  const N = 64;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = N;
+  const g = cv.getContext("2d", { willReadFrequently: true });
+  let data;
+  try {
+    g.drawImage(im, 0, 0, N, N);
+    data = g.getImageData(0, 0, N, N).data;
+  } catch (e) { return []; } // 캔버스가 오염된 경우 조용히 포기
+  const px = new Float64Array(N * N * 3);
+  for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
+    px[j] = data[i]; px[j+1] = data[i+1]; px[j+2] = data[i+2];
+  }
+
+  const out = [];
+  const seen = new Set();
+
+  // ── 주된 색 (점유율이 충분한 것만)
+  for (const c of dominant(px, 5, 8)) {
+    if (c.share < 0.09) continue;
+    const [h, s, l] = rgb2hsl(c.rgb[0], c.rgb[1], c.rgb[2]);
+    const ch = Math.max(c.rgb[0],c.rgb[1],c.rgb[2]) - Math.min(c.rgb[0],c.rgb[1],c.rgb[2]);
+    const name = nameColor(h, s, l, ch);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, cat: "color", hex: toHex(c.rgb) });
+    if (out.length >= 3) break;
+  }
+
+  // ── 전체 통계에서 색온도와 밝기
+  let sumL = 0, warm = 0, cool = 0, wsum = 0;
+  const n = N * N;
+  for (let i = 0; i < n; i++) {
+    const r0 = px[i*3], g0 = px[i*3+1], b0 = px[i*3+2];
+    const [h, s, l] = rgb2hsl(r0, g0, b0);
+    sumL += l;
+    const ch = Math.max(r0,g0,b0) - Math.min(r0,g0,b0);
+    if (ch > 20) {          // 채도가 뚜렷한 픽셀만 색온도 판단에 쓴다
+      const w = s / 100;
+      wsum += w;
+      if (h < 65 || h >= 330) warm += w;
+      else if (h >= 175 && h < 265) cool += w;
+    }
+  }
+  const meanL = sumL / n;
+  if (wsum > n * 0.05) {
+    const wr = warm / wsum, cr = cool / wsum;
+    if (wr > 0.45 && wr > cr * 2) out.push({ name: "따뜻함", cat: "mood" });
+    else if (cr > 0.40 && cr > wr * 2) out.push({ name: "서늘함", cat: "mood" });
+  }
+  if (meanL >= 68) out.push({ name: "밝음", cat: "light" });
+  else if (meanL <= 32) out.push({ name: "어둑함", cat: "light" });
+
+  return out;
+}
+
+function ensureAuto(it, im) {
+  if (!it || AUTO.has(it.id)) return false;
+  const res = analyzeImage(im);
+  AUTO.set(it.id, res);
+  return true;
+}
+
 function TagField(host,getIds,setIds,placeholder){
   host.innerHTML='<div class="sugs"><div class="tagfield"></div><div class="sugbox" hidden></div></div>';
   const field=host.querySelector(".tagfield"), sugbox=host.querySelector(".sugbox");
@@ -1526,7 +1685,7 @@ function TagField(host,getIds,setIds,placeholder){
   field.addEventListener("click",()=>input.focus());
   field.appendChild(input);
   paint();
-  return {paint:paint,focus:()=>input.focus()};
+  return {paint:paint,focus:()=>input.focus(),commit:commit};
 }
 
 /* ══ 상세 화면 ════════════════════════════════════════ */
@@ -1547,7 +1706,8 @@ function sheetHTML(){
   '<aside class="panel" id="panel">'+
     '<div class="grp"><textarea class="ttl" id="pTitle" rows="1" placeholder="제목 없음"></textarea>'+
       '<div class="date mono" id="pDate"></div></div>'+
-    '<div class="grp"><h3><span class="lbl">태그</span></h3><div id="pTags"></div></div>'+
+    '<div class="grp"><h3><span class="lbl">태그</span></h3><div id="pTags"></div>'+
+      '<div id="pAuto" class="autobox" hidden></div></div>'+
     '<div class="grp"><h3><span class="lbl">한 줄 인상</span></h3>'+
       '<textarea class="note" id="pNote" placeholder="이 장면이 왜 마음에 들었는지"></textarea></div>'+
     '<div class="grp"><h3><span class="lbl">좋아하는 부분</span><span class="lbl" id="pRgN"></span></h3>'+
@@ -1571,6 +1731,10 @@ function openItem(id,focusRegion){
   const img=sheetEl.querySelector("#shImg");
   img.src=urlFor(it.img&&it.img.key);
   img.style.width="100%"; img.style.height="100%";
+  /* 사진이 준비되면 색을 읽어 태그 후보를 만든다 (기기 안에서만) */
+  const runAuto=()=>{ try{ if(ensureAuto(it,img)&&CUR===it) renderAuto(); }catch(e){ console.warn(e); } };
+  if(img.complete&&img.naturalWidth) runAuto();
+  else img.addEventListener("load",runAuto,{once:true});
   DRAW=(it.regions||[]).length===0;
   fitFrame(); renderPanel(); renderRegions(); updateDrawUI();
   if(SEL) selectRegion(SEL,true);
@@ -1612,6 +1776,7 @@ function updateDrawUI(){
   hint.hidden=!DRAW;
   hint.textContent="좋았던 부분을 드래그해서 감싸주세요";
 }
+let PTAGS=null;
 function renderPanel(){
   if(!CUR) return;
   const t=sheetEl.querySelector("#pTitle");
@@ -1619,8 +1784,33 @@ function renderPanel(){
   sheetEl.querySelector("#pDate").textContent=fmtDate(CUR.createdAt);
   const n=sheetEl.querySelector("#pNote");
   n.value=CUR.note||""; autoGrow(n);
-  TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"색, 소재, 분위기…");
+  PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"색, 소재, 분위기…");
+  renderAuto();
   renderLinks();
+}
+
+/* 사진에서 읽어낸 색을 태그 후보로 보여준다. 누르면 태그가 된다. */
+function renderAuto(){
+  if(!sheetEl||!CUR) return;
+  const box=sheetEl.querySelector("#pAuto");
+  const list=AUTO.get(CUR.id);
+  if(!list||!list.length){ box.hidden=true; box.innerHTML=""; return; }
+  const have=new Set((CUR.tags||[]).map(id=>{const t=tagById(id);return t?t.name:"";}));
+  const rest=list.filter(s=>!have.has(s.name));
+  if(!rest.length){ box.hidden=true; box.innerHTML=""; return; }
+  box.hidden=false;
+  box.innerHTML='<div class="autohead"><span class="lbl">사진의 색에서</span></div>'+
+    '<div class="autolist">'+rest.map(s=>
+      '<button class="tg" data-auto="'+esc(s.name)+'" data-autocat="'+esc(s.cat)+'">'+
+      (s.hex? '<i class="sw" style="background:'+esc(s.hex)+'"></i>'
+            : '<i class="dot" style="background:var('+CATMAP[s.cat].v+')"></i>')+
+      esc(s.name)+'</button>').join("")+'</div>';
+  box.querySelectorAll("[data-auto]").forEach(b=>{
+    b.addEventListener("click",()=>{
+      if(PTAGS) PTAGS.commit(b.dataset.auto,b.dataset.autocat);
+      renderAuto();
+    });
+  });
 }
 function renderLinks(){
   const box=sheetEl.querySelector("#pLinks");
