@@ -140,8 +140,15 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
+          // 받아온 페이지를 "그 페이지 자리에" 넣는다.
+          // 무조건 ./index.html 에 넣으면 privacy.html 을 한 번 열었을 때
+          // 앱 첫 화면 캐시가 방침 페이지로 덮여버린다.
           const copy = res.clone();
-          caches.open(SHELL).then((c) => c.put("./index.html", copy));
+          const u = new URL(req.url);
+          u.search = "";
+          u.hash = "";
+          const key = u.pathname.endsWith("/") ? "./index.html" : u.href;
+          caches.open(SHELL).then((c) => c.put(key, copy)).catch(() => {});
           return res;
         })
         // 오프라인: 그 페이지 자체를 캐시에서 먼저 찾고(개인정보처리방침 등),
