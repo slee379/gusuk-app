@@ -365,6 +365,88 @@ button{background:none;border:0;padding:0;cursor:pointer}
   font-size:13px;line-height:1.6;padding:0;min-height:22px}
 .rgitem textarea::placeholder{color:var(--faint)}
 
+/* ── 무드보드 ────────────────────────────────────────── */
+.bhead{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line);
+}
+.bhead .bpick{width:auto;min-width:150px;max-width:260px}
+.bhead .slider{width:120px;flex:none}
+
+/* 색 띠 — 담긴 조각들에서 뽑은 색을 비율대로 */
+.palette{
+  display:flex;height:76px;border-radius:4px;overflow:hidden;
+  border:1px solid var(--line-2);margin-bottom:18px;
+}
+.palette .sw{
+  position:relative;min-width:34px;display:flex;align-items:flex-end;
+  justify-content:center;padding-bottom:6px;
+}
+.palette .sw span{
+  font-size:9.5px;letter-spacing:.04em;padding:2px 5px;border-radius:2px;
+  background:rgba(255,255,255,.82);color:#1B1C1A;opacity:0;transition:opacity .14s;
+}
+.palette .sw:hover span{opacity:1}
+
+/* 조각 격자 — 글자를 걷어내고 재질만 */
+.bgrid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--sw),1fr));
+  gap:10px;margin-bottom:22px;
+}
+.bsw{
+  position:relative;margin:0;border-radius:3px;overflow:hidden;
+  border:1px solid var(--line);background:var(--sunk);cursor:pointer;
+  transition:border-color .15s,box-shadow .15s,transform .15s;
+}
+.bsw:hover{border-color:var(--accent-line);box-shadow:var(--shadow-lift);transform:translateY(-2px)}
+.bsw .img{width:100%;display:block;background-color:var(--sunk)}
+.bsw .unpin{
+  position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:2px;
+  display:grid;place-items:center;opacity:0;transition:opacity .14s;
+  background:color-mix(in srgb,var(--card) 88%,transparent);
+  border:1px solid var(--line);color:var(--ink-2);
+}
+.bsw:hover .unpin{opacity:1}
+.bsw .unpin:hover{color:var(--danger)}
+.bsw .unpin svg{width:11px;height:11px}
+
+/* 담긴 것들의 태그 요약 */
+.bsum{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:7px}
+.bsumrow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bsumrow .lbl{flex:0 0 64px}
+.bsumtags{display:flex;flex-wrap:wrap;gap:4px}
+
+/* 카드 위의 핀 버튼 */
+.pinbtn{
+  position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:3px;
+  display:grid;place-items:center;z-index:2;
+  background:color-mix(in srgb,var(--card) 84%,transparent);
+  backdrop-filter:blur(6px);border:1px solid var(--line);color:var(--muted);
+  opacity:0;transition:opacity .14s,color .14s,border-color .14s;
+}
+.card:hover .pinbtn,.pinbtn.on,.pinbtn:focus-visible{opacity:1}
+.pinbtn:hover{color:var(--ink);border-color:var(--accent-line)}
+.pinbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
+.pinbtn svg{width:13px;height:13px}
+
+/* 부분 메모 줄의 핀 */
+.rgpin{
+  margin-left:auto;width:22px;height:22px;display:grid;place-items:center;
+  border-radius:2px;color:var(--faint);
+}
+.rgpin:hover{color:var(--ink-2);background:var(--sunk)}
+.rgpin.on{color:var(--accent)}
+.rgpin svg{width:12px;height:12px}
+.rgitem .del{margin-left:6px}
+
+@media (max-width:820px){
+  .bhead .bpick{min-width:120px;flex:1}
+  .bhead .slider{width:88px}
+  .palette{height:60px}
+  .bgrid{gap:7px}
+  .pinbtn{opacity:1}          /* 폰엔 hover 가 없다 */
+}
+
 /* ── 태그 정리 ───────────────────────────────────────── */
 .tagedit{display:flex;align-items:center;gap:5px;margin-bottom:5px}
 .tagedit .tn{
@@ -647,6 +729,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   <div class="switch" id="viewSw" role="tablist" aria-label="화면 전환">
     <button role="tab" data-view="archive" aria-selected="true">아카이브</button>
     <button role="tab" data-view="graph" aria-selected="false">그래프</button>
+    <button role="tab" data-view="board" aria-selected="false">무드보드</button>
   </div>
   <div class="sp"></div>
   <span class="lbl" id="stat"></span>
@@ -729,6 +812,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
       <div id="setupBox"></div>
       <div id="gridWrap"></div>
     </div>
+
+    <div class="pad" id="board" hidden></div>
 
     <div class="gwrap" id="graph" hidden>
       <canvas id="cv"></canvas>
@@ -823,7 +908,7 @@ const imgPut= (k,b)=>tx("img","readwrite",s=>s.put(b,k));
 const imgDel= k=>tx("img","readwrite",s=>s.delete(k));
 
 /* ══ 상태 ══════════════════════════════════════════════ */
-let ST={v:1,seq:1,items:[],tags:[],spaces:[]};
+let ST={v:1,seq:1,items:[],tags:[],spaces:[],boards:[]};
 let URLS=new Map();      // imgKey -> objectURL
 let IMGS=new Map();      // imgKey -> HTMLImageElement (그래프용)
 let saveTimer=null, storageWarned=false;
@@ -861,6 +946,64 @@ async function hydrateURLs(){
       if(blob) URLS.set(k,URL.createObjectURL(blob));
     }catch(e){ console.warn("image load failed",k,e); }
   }
+}
+
+/* ══ 무드보드 ══════════════════════════════════════════
+   재질과 색을 한자리에 펼쳐 놓고 보는 판. 프로젝트마다 하나씩 만든다.
+
+   핀은 사진 전체이거나 그 안의 한 부분이다. 원본을 복사하지 않고
+   가리키기만 하므로, 사진을 지우면 핀도 함께 사라진다. */
+function boardById(id){ return (ST.boards||[]).find(b=>b.id===id); }
+function ensureBoard(name){
+  const clean=String(name||"").trim().replace(/\s+/g," ");
+  if(!clean) return null;
+  let b=(ST.boards||[]).find(x=>x.name.toLowerCase()===clean.toLowerCase());
+  if(b) return b;
+  b={id:uid("b"),name:clean,note:"",pins:[],createdAt:Date.now(),updatedAt:Date.now()};
+  ST.boards=(ST.boards||[]).concat([b]);
+  return b;
+}
+const pinKey=(itemId,regionId)=>itemId+"|"+(regionId||"");
+function boardHas(b,itemId,regionId){
+  return !!(b&&(b.pins||[]).some(p=>pinKey(p.item,p.region)===pinKey(itemId,regionId)));
+}
+function togglePin(b,itemId,regionId){
+  if(!b) return false;
+  b.pins=b.pins||[];
+  const k=pinKey(itemId,regionId);
+  const i=b.pins.findIndex(p=>pinKey(p.item,p.region)===k);
+  if(i>=0) b.pins.splice(i,1);
+  else b.pins.push({item:itemId,region:regionId||null});
+  b.updatedAt=Date.now();
+  saveBoards();
+  return i<0;
+}
+/* 사라진 사진·부분을 가리키는 핀은 걷어낸다 */
+function livePins(b){
+  if(!b) return [];
+  return (b.pins||[]).map(p=>{
+    const it=ST.items.find(x=>x.id===p.item);
+    if(!it) return null;
+    if(!p.region) return {it:it,r:null};
+    const r=(it.regions||[]).find(x=>x.id===p.region);
+    return r?{it:it,r:r}:null;
+  }).filter(Boolean);
+}
+function pruneBoards(){
+  (ST.boards||[]).forEach(b=>{
+    b.pins=(b.pins||[]).filter(p=>{
+      const it=ST.items.find(x=>x.id===p.item);
+      if(!it) return false;
+      return !p.region || (it.regions||[]).some(r=>r.id===p.region);
+    });
+  });
+}
+let boardTimer=null;
+function saveBoards(){
+  if(Vault.ok){
+    clearTimeout(boardTimer);
+    boardTimer=setTimeout(()=>vaultWriteBoards(),400);
+  }else save();
 }
 
 /* ══ 공간 ══════════════════════════════════════════════
@@ -1113,8 +1256,8 @@ async function deleteItem(id){
   ST.items.forEach(o=>{ o.links=(o.links||[]).filter(l=>l!==id); });
   const key=it.img&&it.img.key;
   if(key){ const u=URLS.get(key); if(u) URL.revokeObjectURL(u); URLS.delete(key); IMGS.delete(key); }
-  pruneTags(); pruneSpaces();
-  if(Vault.ok){ await vaultDeleteItem(it); await vaultWriteTags(); await vaultWriteSpaces(); }
+  pruneTags(); pruneSpaces(); pruneBoards();
+  if(Vault.ok){ await vaultDeleteItem(it); await vaultWriteTags(); await vaultWriteSpaces(); await vaultWriteBoards(); }
   else { if(key){ try{await imgDel(key);}catch(e){} } save(); }
   renderAll();
   toast("한 장을 지웠어요");
@@ -1207,6 +1350,279 @@ function renderTagEditor(box){
   });
 }
 
+/* 보드에 담는 핀. 담을 보드가 없으면 첫 보드를 만들도록 안내한다. */
+const ICON_PIN='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h4l-.6 3.4 2.1 2.1H4.5l2.1-2.1z"/><path d="M8 7.5V14"/></svg>';
+function pinBtnHTML(itemId,regionId){
+  const b=boardById(CURBOARD)||(ST.boards||[])[0];
+  const on=boardHas(b,itemId,regionId);
+  return '<button class="pinbtn'+(on?" on":"")+'" data-pinadd="'+itemId+'" data-pinrg="'+(regionId||"")+'"'+
+    ' title="'+(on?"보드에서 빼기":"무드보드에 담기")+'">'+ICON_PIN+'</button>';
+}
+function handlePinClick(btn){
+  let b=boardById(CURBOARD)||(ST.boards||[])[0];
+  if(!b){
+    b=ensureBoard("첫 보드");
+    if(!b) return;
+    CURBOARD=b.id;
+    toast('"첫 보드" 를 만들었어요. 무드보드 화면에서 이름을 바꿀 수 있어요.');
+  }
+  CURBOARD=b.id;
+  const added=togglePin(b,btn.dataset.pinadd,btn.dataset.pinrg||null);
+  btn.classList.toggle("on",added);
+  btn.title=added?"보드에서 빼기":"무드보드에 담기";
+  toast(added?'"'+b.name+'" 에 담았어요':'보드에서 뺐어요');
+}
+
+/* ══ 무드보드 화면 ═════════════════════════════════════
+   글자를 걷어내고 재질과 색만 남긴다. 조합을 눈으로 판단하는 화면이다. */
+let CURBOARD=null;          /* 지금 보고 있는 보드 id */
+let SWATCH=190;             /* 조각 크기(px) */
+const PALCACHE=new Map();   /* 핀 -> 대표색들. 계산이 비싸니 기억해둔다 */
+
+/* 한 핀에서 대표색을 뽑는다. 부분이면 그 부분만 잘라서 본다. */
+function pinPalette(pin){
+  const key=pinKey(pin.it.id, pin.r&&pin.r.id);
+  if(PALCACHE.has(key)) return PALCACHE.get(key);
+  const im=imgEl(pin.it.img&&pin.it.img.key);
+  if(!im||!im.complete||!im.naturalWidth) return null;   /* 아직 안 실림 — 나중에 다시 */
+  const N=48;
+  const cv=document.createElement("canvas"); cv.width=cv.height=N;
+  const g=cv.getContext("2d",{willReadFrequently:true});
+  let data;
+  try{
+    if(pin.r){
+      const iw=im.naturalWidth, ih=im.naturalHeight;
+      g.drawImage(im, pin.r.x*iw, pin.r.y*ih,
+        Math.max(1,pin.r.w*iw), Math.max(1,pin.r.h*ih), 0,0,N,N);
+    }else g.drawImage(im,0,0,N,N);
+    data=g.getImageData(0,0,N,N).data;
+  }catch(e){ return null; }
+  const px=new Float64Array(N*N*3);
+  for(let i=0,j=0;i<data.length;i+=4,j+=3){ px[j]=data[i];px[j+1]=data[i+1];px[j+2]=data[i+2]; }
+  const out=dominant(px,4,7).filter(c=>c.share>0.08)
+    .map(c=>({hex:toHex(c.rgb),share:c.share,rgb:c.rgb}));
+  PALCACHE.set(key,out);
+  return out;
+}
+
+/* 담긴 조각 전부에서 팔레트를 모은다. 가까운 색은 합쳐서 비율을 더한다. */
+function boardPalette(pins){
+  const bins=[];
+  let pending=false;
+  for(const pin of pins){
+    const cols=pinPalette(pin);
+    if(cols===null){ pending=true; continue; }
+    for(const c of cols){
+      let hit=null;
+      for(const b of bins){
+        const d=Math.hypot(b.rgb[0]-c.rgb[0],b.rgb[1]-c.rgb[1],b.rgb[2]-c.rgb[2]);
+        if(d<34){ hit=b; break; }
+      }
+      if(hit){
+        const w=hit.share+c.share;
+        hit.rgb=[0,1,2].map(k=>(hit.rgb[k]*hit.share+c.rgb[k]*c.share)/w);
+        hit.share=w;
+      }else bins.push({rgb:c.rgb.slice(),share:c.share});
+    }
+  }
+  bins.sort((a,b)=>b.share-a.share);
+  const top=bins.slice(0,9);
+  const tot=top.reduce((n,b)=>n+b.share,0)||1;
+  return {pending:pending, colors:top.map(b=>({hex:toHex(b.rgb),pct:b.share/tot}))};
+}
+
+function boardTagSummary(pins){
+  const by={};
+  pins.forEach(p=>{
+    const ids=p.r? Array.from(new Set((p.r.tags||[]).concat(p.it.tags||[]))) : itemTagIds(p.it);
+    ids.forEach(id=>{
+      const t=tagById(id); if(!t) return;
+      by[t.cat]=by[t.cat]||{};
+      by[t.cat][t.name]=(by[t.cat][t.name]||0)+1;
+    });
+  });
+  return CATS.filter(c=>by[c.id]).map(c=>({cat:c,
+    tags:Object.entries(by[c.id]).sort((a,b)=>b[1]-a[1])}));
+}
+
+function renderBoard(){
+  const box=$("#board");
+  const boards=ST.boards||[];
+  if(!boards.length){
+    box.innerHTML='<div class="blank"><h3>무드보드를 만들어 보세요</h3>'+
+      '<p>재질과 색만 남기고 글자는 걷어낸 판입니다. 새 프로젝트를 시작할 때 마음에 든 조각들을 여기 모아 놓고, 서로 어울리는지 눈으로 견줘 보세요.</p>'+
+      '<button class="btn primary" id="bNewFirst">첫 보드 만들기</button>'+
+      '<div class="steps"><div><b>01</b><span>보드를 하나 만든다 — 프로젝트 이름으로.</span></div>'+
+      '<div><b>02</b><span>아카이브에서 조각의 핀을 눌러 담는다.</span></div>'+
+      '<div><b>03</b><span>여기서 크기를 키워 재질을 견주고, 위의 색 띠로 색 조합을 본다.</span></div></div></div>';
+    const nb=box.querySelector("#bNewFirst");
+    if(nb) nb.addEventListener("click",newBoardPrompt);
+    return;
+  }
+  if(!CURBOARD||!boardById(CURBOARD)) CURBOARD=boards[0].id;
+  const b=boardById(CURBOARD);
+  const pins=livePins(b);
+  const pal=boardPalette(pins);
+
+  box.innerHTML=
+    '<div class="bhead">'+
+      '<select class="spsel bpick" id="bPick">'+
+        boards.map(x=>'<option value="'+x.id+'"'+(x.id===b.id?' selected':'')+'>'+esc(x.name)+'</option>').join("")+
+      '</select>'+
+      '<button class="btn" id="bNew">새 보드</button>'+
+      '<button class="btn ghost" id="bRename">이름</button>'+
+      '<button class="btn ghost" id="bDel">보드 지우기</button>'+
+      '<div style="flex:1"></div>'+
+      '<span class="lbl">조각 크기</span>'+
+      '<input class="slider" type="range" id="bSize" min="110" max="380" step="10" value="'+SWATCH+'">'+
+      '<button class="btn primary" id="bExport">이미지로 저장</button>'+
+    '</div>'+
+    (pal.colors.length?
+      '<div class="palette" id="palette">'+pal.colors.map(c=>
+        '<div class="sw" style="background:'+c.hex+';flex:'+Math.max(0.6,c.pct*10).toFixed(2)+'" title="'+c.hex+'">'+
+        '<span class="mono">'+c.hex.toUpperCase()+'</span></div>').join("")+'</div>'
+      : '')+
+    (pins.length?
+      '<div class="bgrid" style="--sw:'+SWATCH+'px">'+pins.map(function(p,i){
+        const style=p.r? cropStyle(p.it,p.r)
+          : 'background-image:url('+urlFor(p.it.img&&p.it.img.key)+');background-size:cover;background-position:center;aspect-ratio:'+
+            (((p.it.img&&p.it.img.w)||3)/((p.it.img&&p.it.img.h)||2)).toFixed(4);
+        const clip=(p.r&&p.r.path&&p.r.path.length>2)?';clip-path:'+pathToClip(p.r.path):'';
+        const cap=p.r?(p.r.text||""):(p.it.title||"");
+        return '<figure class="bsw" data-pin="'+i+'" title="'+esc(cap||p.it.title||"")+'">'+
+          '<div class="img" style="'+style+clip+'"></div>'+
+          '<button class="unpin" data-unpin="'+i+'" title="빼기">'+ICON_X+'</button>'+
+        '</figure>';
+      }).join("")+'</div>'
+      : '<div class="blank"><h3>아직 담긴 게 없어요</h3><p>아카이브에서 조각의 핀을 눌러 담아보세요. 「좋아하는 부분만」으로 보면 재질 조각이 바로 보입니다.</p></div>')+
+    (pins.length? '<div class="bsum">'+boardTagSummary(pins).map(g=>
+        '<div class="bsumrow"><i class="dot" style="background:var('+g.cat.v+')"></i>'+
+        '<span class="lbl">'+esc(g.cat.name)+'</span>'+
+        '<span class="bsumtags">'+g.tags.map(t=>'<span class="mini">'+esc(t[0])+(t[1]>1?' x'+t[1]:'')+'</span>').join("")+'</span></div>').join("")+
+      '</div>' : '');
+
+  wireBoard(b,pins);
+  /* 사진이 아직 안 실렸으면 잠시 뒤 다시 그린다 (팔레트가 비지 않도록) */
+  if(pal.pending) setTimeout(function(){ if(VIEW==="board") renderBoard(); },420);
+}
+
+/* 보드를 한 장의 그림으로 저장한다 — 색 띠 + 조각들.
+   화면과 같은 구성이되 글자는 최소로. 시공사·친구에게 그대로 보낼 수 있게. */
+async function exportBoard(b,pins){
+  if(!pins.length){ toast("담긴 게 없어요.",true); return; }
+  const COLS=Math.min(4,Math.max(2,Math.round(Math.sqrt(pins.length))));
+  const CELL=420, GAP=16, PAD=40, BAR=90;
+  const rows=Math.ceil(pins.length/COLS);
+  const W=PAD*2+COLS*CELL+(COLS-1)*GAP;
+  const H=PAD*2+BAR+GAP+rows*CELL+(rows-1)*GAP+56;
+  const cv=document.createElement("canvas");
+  cv.width=W; cv.height=H;
+  const g=cv.getContext("2d");
+  g.fillStyle="#EDECE6"; g.fillRect(0,0,W,H);
+
+  /* 색 띠 */
+  const pal=boardPalette(pins);
+  let x=PAD;
+  const barW=W-PAD*2;
+  pal.colors.forEach(c=>{
+    const w=Math.max(28,barW*c.pct);
+    g.fillStyle=c.hex; g.fillRect(x,PAD,w,BAR);
+    x+=w;
+  });
+  if(pal.colors.length){
+    g.strokeStyle="rgba(27,28,26,.15)"; g.lineWidth=1;
+    g.strokeRect(PAD+.5,PAD+.5,Math.min(barW,x-PAD)-1,BAR-1);
+  }
+
+  /* 조각들 */
+  for(let i=0;i<pins.length;i++){
+    const p=pins[i];
+    const cx=PAD+(i%COLS)*(CELL+GAP);
+    const cy=PAD+BAR+GAP+Math.floor(i/COLS)*(CELL+GAP);
+    const im=imgEl(p.it.img&&p.it.img.key);
+    g.save();
+    g.beginPath(); g.rect(cx,cy,CELL,CELL); g.clip();
+    g.fillStyle="#E3E3DE"; g.fillRect(cx,cy,CELL,CELL);
+    if(im&&im.complete&&im.naturalWidth){
+      const iw=im.naturalWidth, ih=im.naturalHeight;
+      const sx=p.r?p.r.x*iw:0, sy=p.r?p.r.y*ih:0;
+      const sw=p.r?Math.max(1,p.r.w*iw):iw, sh=p.r?Math.max(1,p.r.h*ih):ih;
+      const sc=Math.max(CELL/sw,CELL/sh);
+      g.drawImage(im,sx,sy,sw,sh,
+        cx+CELL/2-sw*sc/2, cy+CELL/2-sh*sc/2, sw*sc, sh*sc);
+    }
+    g.restore();
+    g.strokeStyle="rgba(27,28,26,.18)"; g.lineWidth=1;
+    g.strokeRect(cx+.5,cy+.5,CELL-1,CELL-1);
+  }
+
+  /* 이름 */
+  g.fillStyle="#1B1C1A";
+  g.font='500 26px "IBM Plex Sans KR","IBM Plex Sans",sans-serif';
+  g.textBaseline="alphabetic";
+  g.fillText(b.name, PAD, H-PAD+8);
+  g.fillStyle="#8A9099";
+  g.font='400 18px "IBM Plex Mono",monospace';
+  const stamp=new Date().toISOString().slice(0,10);
+  g.fillText(pins.length+"조각 · "+stamp, PAD, H-PAD+34);
+
+  const blob=await new Promise(res=>cv.toBlob(res,"image/png"));
+  if(!blob){ toast("이미지를 만들지 못했어요.",true); return; }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=b.name.replace(/[\\/:*?"<>|]/g,"")+"-무드보드.png";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast("이미지로 저장했어요");
+}
+
+function newBoardPrompt(){
+  const name=prompt("새 보드 이름 (예: 성수동 프로젝트)");
+  if(name===null) return;
+  const b=ensureBoard(name);
+  if(!b){ toast("이름을 적어주세요.",true); return; }
+  CURBOARD=b.id; saveBoards(); renderBoard();
+}
+
+function wireBoard(b,pins){
+  const box=$("#board");
+  const on=(id,ev,fn)=>{ const el=box.querySelector(id); if(el) el.addEventListener(ev,fn); };
+  on("#bPick","change",e=>{ CURBOARD=e.target.value; renderBoard(); });
+  on("#bNew","click",newBoardPrompt);
+  on("#bRename","click",()=>{
+    const n=prompt("보드 이름",b.name);
+    if(n===null) return;
+    const clean=String(n).trim();
+    if(!clean) return;
+    b.name=clean; b.updatedAt=Date.now(); saveBoards(); renderBoard();
+  });
+  on("#bDel","click",()=>{
+    if(!confirm('"'+b.name+'" 보드를 지웁니다. 사진과 메모는 그대로 남아요.')) return;
+    ST.boards=(ST.boards||[]).filter(x=>x.id!==b.id);
+    CURBOARD=null; saveBoards(); renderBoard();
+  });
+  on("#bSize","input",e=>{
+    SWATCH=+e.target.value;
+    const g=box.querySelector(".bgrid");
+    if(g) g.style.setProperty("--sw",SWATCH+"px");
+  });
+  on("#bExport","click",()=>exportBoard(b,pins));
+  box.querySelectorAll("[data-unpin]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      e.stopPropagation();
+      const p=pins[+btn.dataset.unpin];
+      if(p) togglePin(b,p.it.id,p.r&&p.r.id);
+      renderBoard();
+    });
+  });
+  box.querySelectorAll("[data-pin]").forEach(fig=>{
+    fig.addEventListener("click",()=>{
+      const p=pins[+fig.dataset.pin];
+      if(p) openItem(p.it.id,p.r&&p.r.id);
+    });
+  });
+}
+
 /* ══ 아카이브 ═════════════════════════════════════════ */
 function renderChips(){
   const box=$("#activeChips");
@@ -1225,6 +1641,7 @@ function cardHTML(it){
   const ratio=it.img&&it.img.w?(it.img.h/it.img.w*100):66;
   const title=it.title?'<div class="t">'+esc(it.title)+'</div>':'<div class="t none">제목 없음</div>';
   return '<article class="card" data-open="'+it.id+'" tabindex="0">'+
+    pinBtnHTML(it.id,null)+
     (n?'<div class="pins"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1"/><rect x="5" y="6" width="5" height="4" rx=".5" fill="currentColor" opacity=".35"/></svg>'+n+'</div>':"")+
     '<img loading="lazy" src="'+urlFor(it.img&&it.img.key)+'" alt="" style="aspect-ratio:'+(it.img&&it.img.w? it.img.w+"/"+it.img.h : "3/2")+'">'+
     '<div class="meta">'+title+(tg||more?'<div class="row">'+tg+more+'</div>':"")+'</div></article>';
@@ -1246,6 +1663,7 @@ function regionCardHTML(o){
   const memo=o.r.text? '<div class="memo">'+esc(o.r.text)+'</div>' : '<div class="memo none">메모 없음</div>';
   return '<article class="card" data-open="'+o.it.id+'" data-rgsel="'+o.r.id+'" tabindex="0">'+
     '<div class="pins">'+(o.i+1)+'</div>'+
+    pinBtnHTML(o.it.id,o.r.id)+
     '<div class="crop" style="'+cropStyle(o.it,o.r)+
       ((o.r.path&&o.r.path.length>2)?';clip-path:'+pathToClip(o.r.path):"")+'"></div>'+
     '<div class="meta">'+memo+(tg?'<div class="row">'+tg+'</div>':"")+
@@ -1416,7 +1834,7 @@ function blankHTML(){
 }
 
 /* ══ 폴더 저장소 (옵시디언 방식) ═══════════════════════ */
-const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,spacesSeen:0,timer:null,loading:false};
+const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,spacesSeen:0,boardsSeen:0,timer:null,loading:false};
 const FS_OK = typeof window.showDirectoryPicker === "function";
 
 function tagNames(ids){
@@ -1510,6 +1928,29 @@ function applySpaceMeta(list){
   });
 }
 
+async function vaultWriteBoards(){
+  if(!Vault.ok) return;
+  Vault.busy++;
+  try{
+    const payload={app:"gusuk",v:1,updatedAt:Date.now(),
+      boards:(ST.boards||[]).map(b=>({name:b.name,note:b.note||"",
+        pins:(b.pins||[]).map(p=>({item:p.item,region:p.region||null}))}))};
+    Vault.boardsSeen=await writeText(Vault.dir,"boards.json",JSON.stringify(payload,null,1));
+  }catch(e){ vaultTrouble(e); }
+  finally{ Vault.busy--; }
+}
+function applyBoards(list){
+  const keep=new Map((ST.boards||[]).map(b=>[b.name,b]));
+  ST.boards=(list||[]).filter(b=>b&&b.name).map(b=>{
+    const old=keep.get(b.name);
+    return {id:old?old.id:uid("b"),name:b.name,note:b.note||"",
+      pins:Array.isArray(b.pins)?b.pins.filter(p=>p&&p.item)
+        .map(p=>({item:String(p.item),region:p.region||null})):[],
+      createdAt:old?old.createdAt:Date.now(),updatedAt:Date.now()};
+  });
+  pruneBoards();
+}
+
 async function vaultWriteImage(it,blob,ext){
   if(!Vault.ok) return;
   Vault.busy++;
@@ -1581,6 +2022,11 @@ async function vaultLoadAll(){
   ST.items=items.sort((a,b)=>a.createdAt-b.createdAt);
   pruneTags(); pruneSpaces();
   applySpaceMeta(spaceMeta);   /* 노트가 만든 공간에 메모·사실을 다시 입힌다 */
+  try{
+    const bh=await Vault.dir.getFileHandle("boards.json");
+    const bf=await bh.getFile(); Vault.boardsSeen=bf.lastModified;
+    applyBoards((JSON.parse(await bf.text())||{}).boards||[]);
+  }catch(e){ ST.boards=ST.boards||[]; }
   Vault.lastSync=Date.now(); Vault.loading=false;
   renderAll(); renderVaultUI();
   if(broken.length) toast(broken.length+"개 파일은 건너뛰었어요 (동기화 충돌본일 수 있어요)",true);
@@ -1629,6 +2075,15 @@ async function vaultSync(quiet){
         changed=true;
       }
     }catch(e){}
+    try{
+      const bh=await Vault.dir.getFileHandle("boards.json");
+      const bf=await bh.getFile();
+      if(bf.lastModified>Vault.boardsSeen){
+        Vault.boardsSeen=bf.lastModified;
+        applyBoards((JSON.parse(await bf.text())||{}).boards||[]);
+        changed=true;
+      }
+    }catch(e){}
     const notes=await subDir("notes");
     const present=new Set();
     for await (const [name,h] of notes.entries()){
@@ -1660,7 +2115,7 @@ async function vaultSync(quiet){
     });
   }catch(e){ if(!quiet) vaultTrouble(e); return; }
   Vault.lastSync=Date.now();
-  if(changed){ pruneTags(); pruneSpaces(); renderAll(); loadVaultImages(); }
+  if(changed){ pruneTags(); pruneSpaces(); pruneBoards(); renderAll(); loadVaultImages(); }
   renderVaultUI();
 }
 
@@ -2526,6 +2981,7 @@ const HANDLES=["nw","n","ne","e","se","s","sw","w"]
 function regionHTML(r,i){
   return '<div class="rgitem" data-rg="'+r.id+'">'+
     '<div class="top"><span class="num">'+(i+1)+'</span><span class="lbl" style="letter-spacing:.1em">부분 메모</span>'+
+    '<button class="rgpin'+(boardHas(boardById(CURBOARD)||(ST.boards||[])[0],CUR?CUR.id:"",r.id)?" on":"")+'" data-pinadd="'+(CUR?CUR.id:"")+'" data-pinrg="'+r.id+'" title="무드보드에 담기">'+ICON_PIN+'</button>'+
     '<button class="del" data-delrg="'+r.id+'" title="지우기"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></button></div>'+
     '<textarea rows="1" data-rgtext="'+r.id+'" placeholder="여기가 왜 좋은지 적어두기"></textarea>'+
     '<div style="margin-top:7px" data-rgtags="'+r.id+'"></div></div>';
@@ -2559,6 +3015,9 @@ function renderRegions(){
     el.addEventListener("mouseleave",()=>hoverRegion(el.dataset.rg,false));
     el.addEventListener("click",e=>{ if(!e.target.closest("button")) selectRegion(el.dataset.rg,false); });
   });
+  box.querySelectorAll("[data-pinadd]").forEach(b=>b.addEventListener("click",e=>{
+    e.stopPropagation(); handlePinClick(b);
+  }));
   box.querySelectorAll("[data-delrg]").forEach(b=>b.addEventListener("click",e=>{
     e.stopPropagation();
     CUR.regions=CUR.regions.filter(x=>x.id!==b.dataset.delrg);
@@ -3320,7 +3779,7 @@ async function exportAll(){
   let ok=0;
   for(let i=0;i<packs.length;i++){
     const payload={app:"gusuk",v:1,exportedAt:Date.now(),part:i+1,parts:packs.length,
-      tags:ST.tags,spaces:ST.spaces||[],items:packs[i]};
+      tags:ST.tags,spaces:ST.spaces||[],boards:ST.boards||[],items:packs[i]};
     const name="\uc88b\uc544\ud558\ub294\uad6c\uc11d-"+stamp+(packs.length>1?"-"+(i+1)+"of"+packs.length:"")+".json";
     if(await saveFile(name,JSON.stringify(payload))) ok++;
     else break;
@@ -3337,6 +3796,17 @@ async function importFiles(files){
     if(!data||data.app!=="gusuk"||!Array.isArray(data.items)){ toast(f.name+" 은(는) 이 아카이브의 백업이 아니에요.",true); continue; }
     const remap=new Map();
     (data.tags||[]).forEach(t=>{ const nt=ensureTag(t.name,t.cat); if(nt) remap.set(t.id,nt.id); });
+    /* 보드는 이름으로 맞추고 핀은 합집합으로 — 같은 프로젝트면 이어붙는다 */
+    (data.boards||[]).forEach(rb=>{
+      if(!rb||!rb.name) return;
+      const nb=ensureBoard(rb.name);
+      if(!nb) return;
+      if(rb.note&&!nb.note) nb.note=rb.note;
+      (rb.pins||[]).forEach(p=>{
+        if(!p||!p.item) return;
+        if(!boardHas(nb,p.item,p.region)) nb.pins.push({item:p.item,region:p.region||null});
+      });
+    });
     /* 공간도 id 가 아니라 이름으로 맞춘다 — 다른 기기에서 온 백업이어도 같은 이름이면 합쳐진다 */
     const spmap=new Map();
     (data.spaces||[]).forEach(sp=>{
@@ -3382,8 +3852,8 @@ async function importFiles(files){
   }
   const ids=new Set(ST.items.map(x=>x.id));
   ST.items.forEach(it=>{ it.links=(it.links||[]).filter(l=>ids.has(l)&&l!==it.id); });
-  pruneTags(); pruneSpaces();
-  if(Vault.ok){ await vaultWriteTags(); await vaultWriteSpaces(); } else save();
+  pruneTags(); pruneSpaces(); pruneBoards();
+  if(Vault.ok){ await vaultWriteTags(); await vaultWriteSpaces(); await vaultWriteBoards(); } else save();
   renderAll();
   toast(items? items+"장을 불러왔어요" : "새로 불러올 사진이 없었어요");
 }
@@ -3392,11 +3862,14 @@ async function importFiles(files){
 let VIEW="archive";
 function setView(v){
   VIEW=v; graphOn=(v==="graph");
+  const boardOn=(v==="board");
   $$("#viewSw button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===v?"true":"false"));
-  $("#archive").hidden=graphOn;
+  $("#archive").hidden=graphOn||boardOn;
   $("#graph").hidden=!graphOn;
-  $("#rail").style.display=graphOn?"none":"";
+  $("#board").hidden=!boardOn;
+  $("#rail").style.display=(graphOn||boardOn)?"none":"";
   if(graphOn){ resizeCanvas(); if(needBuild) buildGraph(); else {alpha=Math.max(alpha,.5);kick();} }
+  if(boardOn) renderBoard();
 }
 function renderAll(){
   renderRail(); renderArchive();
@@ -3458,6 +3931,8 @@ function wire(){
   $("#gridWrap").addEventListener("click",e=>{
     if(e.target.closest("[data-add]")){ $("#filePick").click(); return; }
     if(e.target.closest(".spacehead")) return;   /* 머리말 입력칸은 그냥 둔다 */
+    const pb=e.target.closest("[data-pinadd]");
+    if(pb){ e.stopPropagation(); handlePinClick(pb); return; }
     const sp=e.target.closest("[data-space]");
     if(sp){ INSPACE=sp.dataset.space; renderArchive(); $("#main").scrollTop=0; return; }
     const c=e.target.closest("[data-open]"); if(c) openItem(c.dataset.open,c.dataset.rgsel);
@@ -3559,8 +4034,8 @@ async function intakeFromOutside(){
   try{
     const saved=await kvGet("state");
     if(saved&&Array.isArray(saved.items)){
-      ST=Object.assign({v:1,seq:1,items:[],tags:[],spaces:[]},saved);
-      ST.spaces=ST.spaces||[];
+      ST=Object.assign({v:1,seq:1,items:[],tags:[],spaces:[],boards:[]},saved);
+      ST.spaces=ST.spaces||[]; ST.boards=ST.boards||[];
       ST.items.forEach(it=>{ it.tags=it.tags||[]; it.regions=it.regions||[]; it.links=it.links||[];
         if(it.space===undefined) it.space=null; });
       await hydrateURLs();

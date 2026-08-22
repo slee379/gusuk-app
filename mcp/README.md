@@ -28,7 +28,8 @@ MCP 서버는 **파일을 읽는 프로그램**이다. 그래서 아카이브가
 ├ notes/      사진마다 메모·태그 한 파일 (<id>.json)
 ├ images/      사진 원본
 ├ tags.json    태그 목록
-└ spaces.json  공간 이름·메모·사실
+├ spaces.json  공간 이름·메모·사실
+└ boards.json  무드보드와 담긴 핀
 ```
 
 ---
