@@ -342,6 +342,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
   background:var(--sunk);font-size:12px;line-height:1.4}
 .chip .x{width:13px;height:13px;display:grid;place-items:center;border-radius:2px;color:var(--faint);font-size:13px}
 .chip .x:hover{background:var(--line-2);color:var(--ink)}
+/* 칩 이름을 눌러 그 자리에서 고친다 — 마크다운의 #태그 처럼 */
+.chip .nm{display:inline-flex;align-items:center;gap:1px;padding:0 1px;border-radius:2px;
+  font-size:12px;line-height:1.4;color:inherit;cursor:text}
+.chip .nm:hover{background:var(--line-2)}
+.chip .hash{font-family:var(--f-mono);font-size:11px;font-weight:400;color:var(--faint)}
+.chip.editing{background:var(--card);box-shadow:0 0 0 1px var(--accent-line)}
+.chip .ed{min-width:40px;border:0;background:none;outline:none;padding:0;
+  font-size:12px;line-height:1.4;color:var(--ink);font-family:inherit}
 .sugs{position:relative}
 .sugbox{position:absolute;z-index:20;left:0;right:0;top:2px;background:var(--card);
   border:1px solid var(--line-2);border-radius:3px;box-shadow:var(--shadow-lift);
@@ -396,53 +404,83 @@ button{background:none;border:0;padding:0;cursor:pointer}
   -webkit-user-select:none;user-select:none;
 }
 
-/* ── 무드보드 ────────────────────────────────────────── */
+/* ── 무드보드 ──────────────────────────────────────────
+   피그마의 판처럼, 조각을 아무 데나 놓고 끌어다 견준다.
+   판은 넓고 화면은 좁으니 확대·축소와 이동이 함께 있어야 한다. */
+.bwrap{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--paper)}
 .bhead{
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;
+  padding:11px 18px;border-bottom:1px solid var(--line);
 }
 .bhead .bpick{width:auto;min-width:150px;max-width:260px}
-.bhead .slider{width:120px;flex:none}
+.bpad{flex:1;overflow-y:auto;padding:26px 28px 60px}
 
-/* 색 띠 — 담긴 조각들에서 뽑은 색을 비율대로 */
-.palette{
-  display:flex;height:76px;border-radius:4px;overflow:hidden;
-  border:1px solid var(--line-2);margin-bottom:18px;
+.bcanvas{
+  position:relative;flex:1;overflow:hidden;background:var(--sunk);
+  cursor:grab;touch-action:none;
+  background-image:radial-gradient(var(--line-2) 1px,transparent 1px);
 }
-.palette .sw{
-  position:relative;min-width:34px;display:flex;align-items:flex-end;
-  justify-content:center;padding-bottom:6px;
+.bcanvas.drag{cursor:grabbing}
+.bstage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+.bpin{
+  position:absolute;margin:0;border-radius:2px;background:var(--card);cursor:grab;
+  box-shadow:0 1px 2px rgba(0,0,0,.12),0 10px 26px rgba(0,0,0,.10);
+  -webkit-user-select:none;user-select:none;
 }
-.palette .sw span{
-  font-size:9.5px;letter-spacing:.04em;padding:2px 5px;border-radius:2px;
-  background:rgba(255,255,255,.82);color:#1B1C1A;opacity:0;transition:opacity .14s;
+.bpin.moving{cursor:grabbing;box-shadow:0 2px 6px rgba(0,0,0,.16),0 18px 40px rgba(0,0,0,.18)}
+.bpin.on{outline:2px solid var(--accent);outline-offset:2px}
+.bpin .img{
+  width:100%;height:100%;border-radius:2px;background-color:var(--sunk);
+  background-repeat:no-repeat;pointer-events:none;
 }
-.palette .sw:hover span{opacity:1}
-
-/* 조각 격자 — 글자를 걷어내고 재질만 */
-.bgrid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--sw),1fr));
-  gap:10px;margin-bottom:22px;
-}
-.bsw{
-  position:relative;margin:0;border-radius:3px;overflow:hidden;
-  border:1px solid var(--line);background:var(--sunk);cursor:pointer;
-  transition:border-color .15s,box-shadow .15s,transform .15s;
-}
-.bsw:hover{border-color:var(--accent-line);box-shadow:var(--shadow-lift);transform:translateY(-2px)}
-.bsw .img{width:100%;display:block;background-color:var(--sunk)}
-.bsw .unpin{
-  position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:2px;
+.bpin .unpin{
+  position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:2px;
   display:grid;place-items:center;opacity:0;transition:opacity .14s;
   background:color-mix(in srgb,var(--card) 88%,transparent);
   border:1px solid var(--line);color:var(--ink-2);
 }
-.bsw:hover .unpin{opacity:1}
-.bsw .unpin:hover{color:var(--danger)}
-.bsw .unpin svg{width:11px;height:11px}
+.bpin:hover .unpin,.bpin.on .unpin{opacity:1}
+.bpin .unpin:hover{color:var(--danger)}
+.bpin .unpin svg{width:11px;height:11px}
+.bpin .grip{
+  position:absolute;right:-6px;bottom:-6px;width:14px;height:14px;border-radius:2px;
+  background:var(--card);border:1px solid var(--accent);cursor:nwse-resize;
+  opacity:0;transition:opacity .14s;
+}
+.bpin:hover .grip,.bpin.on .grip{opacity:1}
+.bpin .cap{
+  position:absolute;left:0;right:0;bottom:-19px;font-size:10.5px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .14s;
+}
+.bpin:hover .cap,.bpin.on .cap{opacity:1}
 
-/* 담긴 것들의 태그 요약 */
-.bsum{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:7px}
+.bzoom{
+  position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:2px;
+  padding:4px;border-radius:4px;background:var(--card);
+  border:1px solid var(--line);box-shadow:var(--shadow-lift);
+}
+.bzoom button{width:26px;height:26px;display:grid;place-items:center;border-radius:2px;
+  color:var(--ink-2);font-size:14px;line-height:1}
+.bzoom button:hover{background:var(--sunk);color:var(--ink)}
+.bzoom .pct{min-width:46px;text-align:center;font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
+.bhint{
+  position:absolute;left:12px;bottom:14px;max-width:min(60vw,420px);
+  font-size:11px;line-height:1.6;color:var(--faint);pointer-events:none;
+}
+.bempty{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+  color:var(--muted);font-size:13.5px;line-height:1.8;max-width:36ch;pointer-events:none;
+}
+@media (max-width:820px){
+  .bhead{padding:9px 12px;gap:6px}
+  .bhead .bpick{min-width:110px}
+  .bhint{display:none}
+}
+
+/* 담긴 것들의 태그 요약 — 판 위에 눕힌 얇은 띠 */
+.bsum{flex:none;display:grid;gap:5px;padding:9px 18px;border-bottom:1px solid var(--line);
+  max-height:96px;overflow-y:auto}
+.bsum:empty{display:none}
 .bsumrow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .bsumrow .lbl{flex:0 0 64px}
 .bsumtags{display:flex;flex-wrap:wrap;gap:4px}
@@ -472,14 +510,13 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 @media (max-width:820px){
   .bhead .bpick{min-width:120px;flex:1}
-  .bhead .slider{width:88px}
-  .palette{height:60px}
-  .bgrid{gap:7px}
   .pinbtn{opacity:1}          /* 폰엔 hover 가 없다 */
+  .bpin .unpin,.bpin .grip,.bpin .cap{opacity:1}
 }
 
 /* ── 태그 정리 ───────────────────────────────────────── */
 .tagedit{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.tagedit .hash{font-family:var(--f-mono);font-size:11px;color:var(--faint);flex:none}
 .tagedit .tn{
   flex:1;min-width:0;border:1px solid var(--line);background:var(--card);
   border-radius:3px;padding:5px 7px;font-size:12.5px;
@@ -495,7 +532,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .tagedit .del:hover{color:var(--danger);background:var(--sunk)}
 .tagedit .del svg{width:11px;height:11px}
 @media (max-width:820px){
-  .tagedit .tn,.tagedit .tc{font-size:16px}   /* iOS 확대 방지 */
+  .tagedit .tn,.tagedit .tc,.chip .ed{font-size:16px}   /* iOS 확대 방지 */
   .tagedit .tc{flex:0 0 88px}
 }
 
@@ -539,6 +576,38 @@ button{background:none;border:0;padding:0;cursor:pointer}
   border:1px solid var(--line);font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);
 }
 .card.space .t{font-family:var(--f-display);font-size:16px;line-height:1.3}
+.card .inspace{
+  position:absolute;left:8px;bottom:8px;max-width:calc(100% - 16px);
+  padding:3px 8px;border-radius:2px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(6px);
+  font-size:10.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* ── 여러 장 골라 한 공간으로 묶기 ───────────────────── */
+.grid.picking .card{cursor:copy}
+.grid.picking .card .pinbtn{display:none}
+.card .tick{
+  position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;z-index:3;
+  display:grid;place-items:center;border:1px solid var(--line-2);
+  background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(6px);
+  color:transparent;
+}
+.card .tick svg{width:12px;height:12px}
+.card.picked{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-line)}
+.card.picked .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
+.selbar{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:9px 12px;border-radius:4px;background:var(--card);
+  border:1px solid var(--line-2);box-shadow:var(--shadow-lift);max-width:calc(100vw - 24px);
+}
+.selbar .cnt{font-family:var(--f-mono);font-size:11px;color:var(--ink-2);
+  padding-right:4px;border-right:1px solid var(--line);margin-right:2px}
+.selbar .spsel{width:auto;min-width:130px;max-width:180px}
+@media (max-width:820px){
+  .selbar{left:8px;right:8px;transform:none;bottom:10px;justify-content:flex-end}
+  .selbar .spsel{flex:1;min-width:0}
+}
 
 .spacehead{
   border:1px solid var(--line);border-radius:4px;background:var(--card);
@@ -834,6 +903,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
           <h1 id="viewTitle">모든 구석</h1>
           <p class="sub" id="viewSub">아직 기록이 없어요</p>
         </div>
+        <button class="btn ghost" id="btnNewSpace" title="사진을 묶어 둘 공간을 먼저 만든다">+ 새 공간</button>
+        <button class="btn ghost" id="btnGroup" hidden>공간으로 묶기</button>
         <button class="btn" id="bulkPin" hidden>보이는 것 담기</button>
         <div class="switch sm" id="modeSw" role="tablist" aria-label="보기 방식">
           <button role="tab" data-mode="photo" aria-selected="true">사진으로</button>
@@ -845,7 +916,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
       <div id="gridWrap"></div>
     </div>
 
-    <div class="pad" id="board" hidden></div>
+    <div class="bwrap" id="board" hidden></div>
 
     <div class="gwrap" id="graph" hidden>
       <canvas id="cv"></canvas>
@@ -874,6 +945,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   </div>
 </div>
 
+<div class="selbar" id="selBar" hidden></div>
 <div class="toasts" id="toasts"></div>
 <script>
 (function(){
@@ -891,6 +963,82 @@ const CATS = [
   {id:"etc",       name:"기타",        v:"--c-etc",       sug:[]}
 ];
 const CATMAP = Object.fromEntries(CATS.map(c=>[c.id,c]));
+
+/* ══ 태그 속성 알아채기 ════════════════════════════════
+   "노랑" 이라고만 적어도 색 부문으로 들어가게 하려는 것. 부문을 일일이
+   고르지 않아도 태그가 제자리를 찾는다.
+
+   판정은 두 갈래 — 이름 안에 든 낱말(CATWORDS)과 끝맺음 꼴(CATPATS).
+   여러 갈래에 걸리면 '더 길게 맞은 쪽'이 이긴다. 그래서 "조명갓"은
+   빛(조명)이 아니라 가구(조명갓)로, "마감재"는 디테일(마감)이 아니라
+   소재로 간다. 길이가 같으면 낱말 쪽이 이긴다.
+
+   한 글자 낱말은 엉뚱한 데 걸리기 쉬워('천장'의 천, '연결'의 결)
+   되도록 뺐다. 남긴 건 벽·창·문·빛처럼 더 긴 낱말이 늘 앞서는 것들이다. */
+const CATWORDS={
+  color:["빨강","빨간","붉은","주황","주홍","노랑","노란","연두","초록","녹색","청록",
+    "파랑","파란","하늘빛","남색","네이비","보라","자주","분홍","핑크",
+    "하양","하얀","흰","검정","검은","까만","회색","연회색",
+    "베이지","아이보리","크림","오프화이트","화이트","블랙","그레이","실버","골드","은빛","금빛",
+    "카키","올리브","머스타드","황토","버건디","와인빛","민트","코랄","살구",
+    "브라운","갈색","적갈","벽돌빛","테라코타","먹색",
+    "웜톤","쿨톤","뉴트럴","파스텔","채도","무채색","단색","색감","색상","컬러","빛깔","톤온톤"],
+  material:["오크","월넛","티크","자작나무","애쉬","합판","원목","우드","나무","목재","무늬목","마루",
+    "대리석","마블","라임스톤","트래버틴","석재","자연석","화강암","테라조",
+    "콘크리트","시멘트","모르타르","벽돌","타일","포세린","도기","세라믹","도자",
+    "유리","글라스","금속","철제","철물","스틸","스테인리스","황동","놋쇠","브라스",
+    "알루미늄","구리","동판","주물",
+    "리넨","린넨","코튼","면직","니트","패브릭","직물","가죽","레더","스웨이드","벨벳",
+    "라탄","등나무","대나무","한지","석고","회벽","미장","도장","페인트","마감재","자재","소재"],
+  light:["조명","자연광","간접","직접조명","펜던트","샹들리에","다운라이트","스포트","스팟",
+    "브라켓","스탠드","무드등","전구","백열","형광","led","역광","측광","채광","반사광",
+    "그림자","그늘","햇빛","햇살","햇볕","일광","촛불","석양","노을",
+    "어둑","어둑함","어두움","어두운","밝음","밝은","조도","색온도","실루엣","빛"],
+  object:["의자","체어","스툴","벤치","소파","카우치","테이블","탁자","책상","선반","진열장",
+    "책장","수납장","캐비닛","서랍","침대","러그","카펫","쿠션","커튼","블라인드","거울",
+    "액자","그림","포스터","화병","꽃병","도자기","그릇","식기","오브제","가구","조각상",
+    "시계","식물","화분","화초","플랜테리어","조명갓","조명기구","옷걸이","행어","트롤리",
+    "협탁","사이드보드","콘솔"],
+  structure:["아치","천장","층고","벽면","가벽","파티션","칸막이","바닥","계단","단차",
+    "창가","창문","창틀","출입구","현관","복도","통로","동선","배치","구조","평면",
+    "오픈","개방","중정","마당","발코니","테라스","베란다","다락","니치","벽감",
+    "슬라브","보이드","박공","경사","대칭","비대칭","레벨","코너",
+    "높은","낮은","좁은","넓은","깊은","레이아웃","공간감","벽","창","문"],
+  mood:["분위기","느낌","무드","고요","조용","적막","차분","안정","따뜻","포근","아늑","편안",
+    "서늘","시원","산뜻","깔끔","정돈","단정","미니멀","심플","소박","담백","절제","우아",
+    "클래식","모던","빈티지","레트로","앤티크","낡은","오래된","세월","묵직","경쾌","화사",
+    "은은","몽환","낭만","쓸쓸","여백","여유","활기","생기","자연스러","러프","투박",
+    "정갈","단아","고즈넉","호젓","싱그러","고급스"],
+  detail:["몰딩","손잡이","줄눈","마감선","마감 처리","이음새","이음","모서리","모서리 처리",
+    "코너 처리","모따기","엣지","라인","직선","곡선","패턴","무늬","질감","텍스처","그레인",
+    "디테일","조인트","경첩","걸레받이","실리콘","코킹","루버","격자","그리드","스티치",
+    "박음","테두리","경계","단면","마감"]
+};
+/* 끝맺음으로 알아채는 것들. 숫자는 낱말 길이와 견주기 위한 무게다. */
+const CATPATS=[
+  {re:/(색|색감|색상|컬러|톤|빛깔)$/,cat:"color",w:6},
+  {re:/(스러움|스러운|스럽다)$/,cat:"mood",w:5},
+  {re:/(함|움|짐)$/,cat:"mood",w:3},
+  {re:/(재질|소재)$/,cat:"material",w:4}
+];
+/* 이름만 보고 부문을 고른다. 못 고르면 "etc". */
+function guessCat(name){
+  const s=String(name||"").trim().toLowerCase();
+  if(!s) return "etc";
+  const sug=CATS.find(c=>c.sug.some(x=>x.toLowerCase()===s));
+  if(sug) return sug.id;                     /* 미리 넣어둔 보기와 똑같으면 그대로 */
+  let bestCat=null, bestW=0;
+  for(const c of CATS){
+    const ws=CATWORDS[c.id]; if(!ws) continue;
+    let hit=0;
+    for(const w of ws){ if(w.length>hit && s.indexOf(w)>=0) hit=w.length; }
+    if(hit>bestW){ bestW=hit; bestCat=c.id; }
+  }
+  for(const p of CATPATS){                   /* 끝맺음은 더 길게 맞았을 때만 이긴다 */
+    if(p.w>bestW && p.re.test(s)){ bestW=p.w; bestCat=p.cat; }
+  }
+  return bestCat||"etc";
+}
 
 /* ══ 아주 작은 유틸 ════════════════════════════════════ */
 const $  = s=>document.querySelector(s);
@@ -1016,9 +1164,9 @@ function livePins(b){
   return (b.pins||[]).map(p=>{
     const it=ST.items.find(x=>x.id===p.item);
     if(!it) return null;
-    if(!p.region) return {it:it,r:null};
+    if(!p.region) return {it:it,r:null,pin:p};
     const r=(it.regions||[]).find(x=>x.id===p.region);
-    return r?{it:it,r:r}:null;
+    return r?{it:it,r:r,pin:p}:null;
   }).filter(Boolean);
 }
 function pruneBoards(){
@@ -1066,27 +1214,162 @@ function spaceCover(sp){
   if(sp.cover){ const c=list.find(x=>x.id===sp.cover); if(c) return c; }
   return list[0]||null;
 }
-/* 아무 사진도 남지 않은 공간은 치운다 (태그를 pruneTags 로 치우는 것과 같은 규칙) */
+/* 아무 사진도 남지 않은 공간은 치운다 (태그를 pruneTags 로 치우는 것과 같은 규칙).
+   다만 손으로 먼저 만들어 둔 공간(keep)은 비어 있어도 남긴다 —
+   "공간을 만들고 → 거기에 사진을 올린다" 순서를 쓸 수 있어야 하니까. */
 function pruneSpaces(){
   const used=new Set(ST.items.map(it=>it.space).filter(Boolean));
-  ST.spaces=(ST.spaces||[]).filter(sp=>used.has(sp.id));
+  ST.spaces=(ST.spaces||[]).filter(sp=>used.has(sp.id)||sp.keep||sp.id===INSPACE);
+}
+
+/* ══ 여러 장을 한 번에 묶기 ════════════════════════════
+   사진을 올릴 때마다 공간을 하나씩 고르는 게 번거로워서, 아카이브에서
+   여러 장을 골라 한 번에 묶는 길을 따로 뒀다. 고르는 동안에는 공간 카드로
+   접지 않고 낱장으로 펼쳐 보여준다 — 그래야 전부 고를 수 있다. */
+let PICKMODE=false;
+const PICK=new Set();
+
+function startPick(){
+  PICKMODE=true; PICK.clear();
+  MODE="photo";                     /* 부분 조각은 공간에 묶는 대상이 아니다 */
+  renderArchive();
+  toast("묶을 사진을 눌러서 고르세요");
+}
+function endPick(){ PICKMODE=false; PICK.clear(); renderArchive(); }
+function togglePick(id){
+  if(PICK.has(id)) PICK.delete(id); else PICK.add(id);
+  const card=document.querySelector('#gridWrap .card[data-open="'+id+'"]');
+  if(card) card.classList.toggle("picked",PICK.has(id));
+  renderSelBar();
+}
+function newSpacePrompt(){
+  const name=prompt("새 공간 이름 (예: 성수동 카페 A)");
+  if(name===null) return;
+  const sp=ensureSpace(name);
+  if(!sp){ toast("이름을 적어주세요.",true); return; }
+  sp.keep=true;
+  PICKMODE=false; PICK.clear();
+  INSPACE=sp.id;
+  saveSpaces(); renderArchive();
+  const m=$("#main"); if(m) m.scrollTop=0;
+  toast('"'+sp.name+'" 을(를) 만들었어요. 여기서 올리는 사진은 이 공간에 담깁니다.');
+}
+/* 고른 사진들을 한 공간으로 옮긴다. spaceId 가 없으면 묶음에서 뺀다. */
+async function applySpace(ids,spaceId){
+  const sp=spaceId?spaceById(spaceId):null;
+  const touched=[];
+  ids.forEach(id=>{
+    const it=ST.items.find(x=>x.id===id); if(!it) return;
+    const next=sp?sp.id:null;
+    if(it.space===next) return;
+    it.space=next; it.updatedAt=Date.now(); touched.push(it);
+  });
+  if(sp) sp.keep=true;
+  PICKMODE=false; PICK.clear();
+  if(sp) INSPACE=sp.id;
+  pruneSpaces();
+  if(Vault.ok){
+    for(const it of touched) await vaultWriteNote(it);
+    await vaultWriteSpaces();
+  }else save();
+  renderAll(); graphDirty();
+  toast(sp? touched.length+'장을 "'+sp.name+'" 으로 묶었어요'
+          : touched.length+"장을 묶음에서 뺐어요");
+}
+/* 고르는 중에 아래에 뜨는 막대 */
+function renderSelBar(){
+  const bar=$("#selBar"); if(!bar) return;
+  if(!PICKMODE){ bar.hidden=true; bar.innerHTML=""; return; }
+  const n=PICK.size;
+  const list=(ST.spaces||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"ko"));
+  bar.hidden=false;
+  bar.innerHTML='<span class="cnt">'+(n?n+"장 고름":"사진을 눌러 고르세요")+'</span>'+
+    '<select class="spsel" id="selSpace"'+(n?"":" disabled")+' aria-label="묶을 공간">'+
+      '<option value="">묶을 공간 고르기…</option>'+
+      list.map(sp=>'<option value="'+sp.id+'">'+esc(sp.name)+' · '+spaceItems(sp.id).length+'장</option>').join("")+
+      '<option value="__new">+ 새 공간으로 묶기…</option>'+
+      '<option value="__none">묶음에서 빼기</option>'+
+    '</select>'+
+    '<button class="btn ghost" id="selAll">보이는 것 모두</button>'+
+    '<button class="btn ghost" id="selDone">그만두기</button>';
+  const sel=bar.querySelector("#selSpace");
+  sel.addEventListener("change",()=>{
+    const v=sel.value; sel.value="";
+    if(!v||!PICK.size) return;
+    const ids=Array.from(PICK);
+    if(v==="__new"){
+      const name=prompt("새 공간 이름 (예: 성수동 카페 A)");
+      if(name===null) return;
+      const sp=ensureSpace(name);
+      if(!sp){ toast("이름을 적어주세요.",true); return; }
+      applySpace(ids,sp.id);
+    }else if(v==="__none") applySpace(ids,null);
+    else applySpace(ids,v);
+  });
+  bar.querySelector("#selAll").addEventListener("click",()=>{
+    document.querySelectorAll("#gridWrap .card[data-open]").forEach(c=>{
+      PICK.add(c.dataset.open); c.classList.add("picked");
+    });
+    renderSelBar();
+  });
+  bar.querySelector("#selDone").addEventListener("click",endPick);
 }
 
 /* ══ 태그 ══════════════════════════════════════════════ */
 function tagById(id){ return ST.tags.find(t=>t.id===id); }
 function tagByName(name){ const n=name.trim().toLowerCase(); return ST.tags.find(t=>t.name.toLowerCase()===n); }
-function ensureTag(name,cat){
-  const clean=name.trim().replace(/\s+/g," ");
+/* manual 은 "사람이 손으로 고른 부문"이라는 표시다. 그 표시가 붙은 태그는
+   이름이 바뀌어도 부문을 지킨다. "기타"는 부문을 못 정한 상태로 본다 —
+   그래서 이름에서 다시 짚어 본다. */
+function ensureTag(name,cat,manual){
+  const clean=String(name||"").trim().replace(/^[#＃]+/,"").trim().replace(/\s+/g," ");
   if(!clean) return null;
+  if(cat&&!CATMAP[cat]) cat=null;
+  const given=!!cat&&cat!=="etc";
   let t=tagByName(clean);
-  if(t){ if(cat&&t.cat==="etc"&&cat!=="etc"){t.cat=cat;} return t; }
-  if(!cat){
-    const hit=CATS.find(c=>c.sug.some(s=>s.toLowerCase()===clean.toLowerCase()));
-    cat=hit?hit.id:"etc";
+  if(t){
+    if(manual&&cat){ t.cat=cat; t.auto=false; }
+    else if(given&&t.cat==="etc"){ t.cat=cat; t.auto=false; }
+    else if(t.cat==="etc"&&t.auto!==false){        /* 옛 기록도 뒤늦게 제자리를 찾게 */
+      const g=guessCat(clean);
+      if(g!=="etc"){ t.cat=g; t.auto=true; }
+    }
+    return t;
   }
-  t={id:uid("t"),name:clean,cat:cat};
+  if(manual&&cat){
+    t={id:uid("t"),name:clean,cat:cat,auto:false};
+    ST.tags.push(t); return t;
+  }
+  /* 부문을 짚어주지 않았으면 이름에서 알아챈다 — "노랑"이면 색 */
+  if(!given){
+    const g=guessCat(clean);
+    cat=(g!=="etc")?g:"etc";
+  }
+  t={id:uid("t"),name:clean,cat:cat,auto:!given};
   ST.tags.push(t);
   return t;
+}
+/* 옛 기록에 남아 있는 '기타' 태그들을 이름에서 다시 짚어 준다.
+   사람이 골라 둔 부문은 건드리지 않으므로 열 때마다 조용히 한 번씩 돌려도 된다. */
+function adoptTagCats(){
+  let n=0;
+  ST.tags.forEach(t=>{
+    if(t.cat!=="etc"||t.auto===false) return;
+    const g=guessCat(t.name);
+    if(g!=="etc"){ t.cat=g; t.auto=true; n++; }
+  });
+  return n;
+}
+/* 손으로 부문을 고른 적 없는 태그들의 부문을 이름에서 다시 알아챈다.
+   고친 개수를 돌려준다. */
+function reguessTags(){
+  let n=0;
+  ST.tags.forEach(t=>{
+    if(t.auto===false) return;               /* 사람이 정한 것은 건드리지 않는다 */
+    const g=guessCat(t.name);
+    if(g!=="etc"&&g!==t.cat){ t.cat=g; t.auto=true; n++; }
+  });
+  return n;
 }
 function itemTagIds(it){
   const s=new Set(it.tags||[]);
@@ -1137,19 +1420,24 @@ function renameTag(id,nextName){
     toast('"'+t.name+'" 을(를) "'+dup.name+'" 에 합쳤어요');
   }else{
     t.name=clean;
+    /* 사람이 부문을 고른 적 없다면 새 이름에서 다시 알아챈다 */
+    if(t.auto!==false){
+      const g=guessCat(clean);
+      if(g!=="etc"&&g!==t.cat){ t.cat=g; t.auto=true; }
+    }
   }
   pruneTags();
   persistTagChange(touched);
   renderRail(); renderArchive(); graphDirty();
-  if(sheetEl&&!sheetEl.hidden&&CUR) renderPanel();
+  if(sheetEl&&!sheetEl.hidden&&CUR){ renderPanel(); renderRegions(); }
   return true;
 }
 function retagCategory(id,cat){
   const t=tagById(id); if(!t||!CATMAP[cat]||t.cat===cat) return;
-  t.cat=cat;
+  t.cat=cat; t.auto=false;       /* 이제부터는 이름이 바뀌어도 이 부문을 지킨다 */
   persistTagChange([]);          /* 분류는 tags.json 에만 있다 */
   renderRail(); renderArchive(); graphDirty();
-  if(sheetEl&&!sheetEl.hidden&&CUR) renderPanel();
+  if(sheetEl&&!sheetEl.hidden&&CUR){ renderPanel(); renderRegions(); }
 }
 function deleteTagEverywhere(id){
   const t=tagById(id); if(!t) return;
@@ -1256,7 +1544,8 @@ async function addFiles(files){
       const it={
         id:uid("p"),
         title:f.name.replace(/\.[a-z0-9]+$/i,"").slice(0,80),
-        note:"", tags:[], regions:[], links:[], space:null,
+        note:"", tags:[], regions:[], links:[],
+        space:(INSPACE&&spaceById(INSPACE))?INSPACE:null,
         img:null, createdAt:Date.now()+added, updatedAt:Date.now()
       };
       if(Vault.ok){
@@ -1275,8 +1564,9 @@ async function addFiles(files){
     }catch(e){ console.warn(e); toast(f.name+" 은(는) 불러오지 못했어요.",true); }
   }
   if(added){
+    const here=(INSPACE&&spaceById(INSPACE))?spaceById(INSPACE):null;
     save(); renderAll();
-    toast(added+"장을 담았어요");
+    toast(here? added+'장을 "'+here.name+'" 에 담았어요' : added+"장을 담았어요");
     if(added===1&&firstId) openItem(firstId);
   }
 }
@@ -1354,19 +1644,30 @@ function renderTagEditor(box){
     .filter(g=>g.tags.length);
   if(!all.length){ box.innerHTML='<p class="empty-note">고칠 태그가 아직 없어요.</p>'; return; }
   const catOpts=t=>CATS.map(c=>'<option value="'+c.id+'"'+(c.id===t.cat?' selected':'')+'>'+esc(c.name)+'</option>').join("");
-  box.innerHTML='<p class="empty-note" style="margin-bottom:10px">이름을 고치면 붙어 있는 곳에 모두 반영돼요. 이미 있는 이름을 적으면 하나로 합쳐집니다.</p>'+
+  box.innerHTML='<p class="empty-note" style="margin-bottom:8px">이름을 고치고 Enter 를 누르면 붙어 있는 곳에 모두 반영돼요. 이미 있는 이름을 적으면 하나로 합쳐집니다. 부문은 이름에서 저절로 정해지고, 손으로 고르면 그 뒤로는 그 부문을 지킵니다.</p>'+
+    '<button class="btn ghost" id="reguessTags" style="margin-bottom:12px">이름에서 부문 다시 맞추기</button>'+
     all.map(g=>'<div class="cat"><div class="cat-h"><i class="dot" style="background:var('+g.cat.v+')"></i><span class="lbl">'+esc(g.cat.name)+'</span></div>'+
       g.tags.map(x=>'<div class="tagedit" data-te="'+x.t.id+'">'+
+        '<b class="hash">#</b>'+
         '<input class="tn" value="'+esc(x.t.name)+'" aria-label="태그 이름">'+
         '<select class="tc" aria-label="분류">'+catOpts(x.t)+'</select>'+
         '<span class="n mono">'+x.n+'</span>'+
         '<button class="del" data-deltag="'+x.t.id+'" title="이 태그 지우기">'+ICON_X+'</button>'+
       '</div>').join("")+'</div>').join("");
 
+  const rg=box.querySelector("#reguessTags");
+  if(rg) rg.addEventListener("click",()=>{
+    const n=reguessTags();
+    if(!n){ toast("이미 다 제자리에 있어요."); return; }
+    persistTagChange([]);
+    renderRail(); renderArchive(); graphDirty();
+    toast(n+"개 태그의 부문을 다시 맞췄어요");
+  });
+
   box.querySelectorAll(".tagedit").forEach(row=>{
     const id=row.dataset.te;
     const inp=row.querySelector(".tn");
-    const commit=()=>{ const v=inp.value; if(!renameTag(id,v)){ const t=tagById(id); if(t) inp.value=t.name; } };
+    const commit=()=>{ const v=inp.value.replace(/^[#＃]+/,""); if(!renameTag(id,v)){ const t=tagById(id); if(t) inp.value=t.name; } };
     inp.addEventListener("blur",commit);
     inp.addEventListener("keydown",e=>{
       if(e.key==="Enter"){ e.preventDefault(); inp.blur(); }
@@ -1384,6 +1685,7 @@ function renderTagEditor(box){
 
 /* 보드에 담는 핀. 담을 보드가 없으면 첫 보드를 만들도록 안내한다. */
 const ICON_PIN='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h4l-.6 3.4 2.1 2.1H4.5l2.1-2.1z"/><path d="M8 7.5V14"/></svg>';
+const ICON_CHECK='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 5"/></svg>';
 function pinBtnHTML(itemId,regionId){
   const b=boardById(CURBOARD)||(ST.boards||[])[0];
   const on=boardHas(b,itemId,regionId);
@@ -1546,61 +1848,52 @@ function updateBulkBtn(){
 }
 
 /* ══ 무드보드 화면 ═════════════════════════════════════
-   글자를 걷어내고 재질과 색만 남긴다. 조합을 눈으로 판단하는 화면이다. */
+   글자를 걷어내고 재질과 색만 남긴다. 조합을 눈으로 판단하는 화면이다.
+
+   격자에 줄 세우지 않고 피그마의 판처럼 아무 데나 놓는다 — 조각을 서로
+   붙여 보고, 떼어 보고, 크기를 달리해 견주는 일이 곧 조합을 고르는 일이니까.
+   자리(x·y)와 크기(w)는 핀에 함께 적어 두어 다음에 열어도 그대로다. */
 let CURBOARD=null;          /* 지금 보고 있는 보드 id */
-let SWATCH=190;             /* 조각 크기(px) */
-const PALCACHE=new Map();   /* 핀 -> 대표색들. 계산이 비싸니 기억해둔다 */
+let SWATCH=220;             /* 새로 담는 조각의 기본 너비(px) */
+let BSEL=null;              /* 고른 조각 (pinKey) */
+const BVIEW=new Map();      /* 보드마다 마지막으로 보던 자리·배율 */
 
-/* 한 핀에서 대표색을 뽑는다. 부분이면 그 부분만 잘라서 본다. */
-function pinPalette(pin){
-  const key=pinKey(pin.it.id, pin.r&&pin.r.id);
-  if(PALCACHE.has(key)) return PALCACHE.get(key);
-  const im=imgEl(pin.it.img&&pin.it.img.key);
-  if(!im||!im.complete||!im.naturalWidth) return null;   /* 아직 안 실림 — 나중에 다시 */
-  const N=48;
-  const cv=document.createElement("canvas"); cv.width=cv.height=N;
-  const g=cv.getContext("2d",{willReadFrequently:true});
-  let data;
-  try{
-    if(pin.r){
-      const iw=im.naturalWidth, ih=im.naturalHeight;
-      g.drawImage(im, pin.r.x*iw, pin.r.y*ih,
-        Math.max(1,pin.r.w*iw), Math.max(1,pin.r.h*ih), 0,0,N,N);
-    }else g.drawImage(im,0,0,N,N);
-    data=g.getImageData(0,0,N,N).data;
-  }catch(e){ return null; }
-  const px=new Float64Array(N*N*3);
-  for(let i=0,j=0;i<data.length;i+=4,j+=3){ px[j]=data[i];px[j+1]=data[i+1];px[j+2]=data[i+2]; }
-  const out=dominant(px,4,7).filter(c=>c.share>0.08)
-    .map(c=>({hex:toHex(c.rgb),share:c.share,rgb:c.rgb}));
-  PALCACHE.set(key,out);
-  return out;
+function boardView(id){
+  if(!BVIEW.has(id)) BVIEW.set(id,{x:60,y:60,z:1,seen:false});
+  return BVIEW.get(id);
 }
+/* 조각의 세로/가로 비. 부분이면 잘라낸 자리의 비다. */
+function pinRatio(p){
+  const iw=(p.it.img&&p.it.img.w)||3, ih=(p.it.img&&p.it.img.h)||2;
+  if(p.r) return clamp((p.r.h*ih)/Math.max(1e-6,p.r.w*iw),.06,8);
+  return clamp(ih/iw,.06,8);
+}
+const pinW=p=>clamp(Math.round(p.pin.w||SWATCH),40,4000);
+const pinH=p=>Math.max(24,Math.round(pinW(p)*pinRatio(p)));
 
-/* 담긴 조각 전부에서 팔레트를 모은다. 가까운 색은 합쳐서 비율을 더한다. */
-function boardPalette(pins){
-  const bins=[];
-  let pending=false;
-  for(const pin of pins){
-    const cols=pinPalette(pin);
-    if(cols===null){ pending=true; continue; }
-    for(const c of cols){
-      let hit=null;
-      for(const b of bins){
-        const d=Math.hypot(b.rgb[0]-c.rgb[0],b.rgb[1]-c.rgb[1],b.rgb[2]-c.rgb[2]);
-        if(d<34){ hit=b; break; }
-      }
-      if(hit){
-        const w=hit.share+c.share;
-        hit.rgb=[0,1,2].map(k=>(hit.rgb[k]*hit.share+c.rgb[k]*c.share)/w);
-        hit.share=w;
-      }else bins.push({rgb:c.rgb.slice(),share:c.share});
-    }
+/* 아직 자리가 없는 조각에 자리를 준다. force 면 전부 다시 줄 세운다(정돈). */
+function layoutPins(b,pins,force){
+  const GAP=18, MAXW=1240;
+  let x=0,y=0,rowH=0,changed=false;
+  if(!force){
+    /* 이미 놓인 것들 아래에서 이어 붙인다 */
+    pins.forEach(p=>{
+      if(isFinite(p.pin.x)&&isFinite(p.pin.y)) y=Math.max(y,p.pin.y+pinH(p)+GAP);
+    });
   }
-  bins.sort((a,b)=>b.share-a.share);
-  const top=bins.slice(0,9);
-  const tot=top.reduce((n,b)=>n+b.share,0)||1;
-  return {pending:pending, colors:top.map(b=>({hex:toHex(b.rgb),pct:b.share/tot}))};
+  pins.forEach(p=>{
+    if(!force&&isFinite(p.pin.x)&&isFinite(p.pin.y)){
+      if(!isFinite(p.pin.w)){ p.pin.w=SWATCH; changed=true; }
+      return;
+    }
+    if(!isFinite(p.pin.w)) p.pin.w=SWATCH;
+    const w=pinW(p), h=pinH(p);
+    if(x>0&&x+w>MAXW){ x=0; y+=rowH+GAP; rowH=0; }
+    p.pin.x=x; p.pin.y=y;
+    x+=w+GAP; rowH=Math.max(rowH,h);
+    changed=true;
+  });
+  return changed;
 }
 
 function boardTagSummary(pins){
@@ -1617,16 +1910,32 @@ function boardTagSummary(pins){
     tags:Object.entries(by[c.id]).sort((a,b)=>b[1]-a[1])}));
 }
 
+function pinHTML(p,i){
+  const w=pinW(p), h=pinH(p);
+  const style=p.r? cropStyle(p.it,p.r)
+    : 'background-image:url('+urlFor(p.it.img&&p.it.img.key)+');background-size:cover;background-position:center';
+  const clip=(p.r&&p.r.path&&p.r.path.length>2)?';clip-path:'+pathToClip(p.r.path):'';
+  const cap=(p.r?(p.r.text||""):(p.it.title||""))||"";
+  const on=(BSEL===pinKey(p.it.id,p.r&&p.r.id))?" on":"";
+  return '<figure class="bpin'+on+'" data-pin="'+i+'" style="left:'+p.pin.x+'px;top:'+p.pin.y+
+      'px;width:'+w+'px;height:'+h+'px">'+
+    '<div class="img" style="'+style+clip+'"></div>'+
+    (cap?'<figcaption class="cap">'+esc(cap)+'</figcaption>':"")+
+    '<button class="unpin" data-unpin="'+i+'" title="빼기">'+ICON_X+'</button>'+
+    '<i class="grip" data-grip="'+i+'" title="끌어서 크기 바꾸기"></i>'+
+  '</figure>';
+}
+
 function renderBoard(){
   const box=$("#board");
   const boards=ST.boards||[];
   if(!boards.length){
-    box.innerHTML='<div class="blank"><h3>무드보드를 만들어 보세요</h3>'+
-      '<p>재질과 색만 남기고 글자는 걷어낸 판입니다. 새 프로젝트를 시작할 때 마음에 든 조각들을 여기 모아 놓고, 서로 어울리는지 눈으로 견줘 보세요.</p>'+
+    box.innerHTML='<div class="bpad"><div class="blank"><h3>무드보드를 만들어 보세요</h3>'+
+      '<p>재질과 색만 남기고 글자는 걷어낸 판입니다. 마음에 든 조각들을 여기 모아 놓고, 피그마에서처럼 자유롭게 옮겨 가며 서로 어울리는지 눈으로 견줘 보세요.</p>'+
       '<button class="btn primary" id="bNewFirst">첫 보드 만들기</button>'+
       '<div class="steps"><div><b>01</b><span>보드를 하나 만든다 — 프로젝트 이름으로.</span></div>'+
       '<div><b>02</b><span>아카이브에서 조각의 핀을 눌러 담는다.</span></div>'+
-      '<div><b>03</b><span>여기서 크기를 키워 재질을 견주고, 위의 색 띠로 색 조합을 본다.</span></div></div></div>';
+      '<div><b>03</b><span>여기서 끌어다 놓고 크기를 바꿔 가며 조합을 짠다.</span></div></div></div></div>';
     const nb=box.querySelector("#bNewFirst");
     if(nb) nb.addEventListener("click",newBoardPrompt);
     return;
@@ -1634,7 +1943,7 @@ function renderBoard(){
   if(!CURBOARD||!boardById(CURBOARD)) CURBOARD=boards[0].id;
   const b=boardById(CURBOARD);
   const pins=livePins(b);
-  const pal=boardPalette(pins);
+  if(layoutPins(b,pins)) saveBoards();
 
   box.innerHTML=
     '<div class="bhead">'+
@@ -1645,98 +1954,84 @@ function renderBoard(){
       '<button class="btn ghost" id="bRename">이름</button>'+
       '<button class="btn ghost" id="bDel">보드 지우기</button>'+
       '<div style="flex:1"></div>'+
-      '<span class="lbl">조각 크기</span>'+
-      '<input class="slider" type="range" id="bSize" min="110" max="380" step="10" value="'+SWATCH+'">'+
+      '<span class="lbl">'+pins.length+'조각</span>'+
+      '<button class="btn ghost" id="bTidy" title="조각들을 다시 줄 세운다">정돈</button>'+
+      '<button class="btn ghost" id="bFit" title="담긴 걸 한 화면에">화면 맞춤</button>'+
       '<button class="btn primary" id="bExport">이미지로 저장</button>'+
     '</div>'+
-    (pal.colors.length?
-      '<div class="palette" id="palette">'+pal.colors.map(c=>
-        '<div class="sw" style="background:'+c.hex+';flex:'+Math.max(0.6,c.pct*10).toFixed(2)+'" title="'+c.hex+'">'+
-        '<span class="mono">'+c.hex.toUpperCase()+'</span></div>').join("")+'</div>'
-      : '')+
-    (pins.length?
-      '<div class="bgrid" style="--sw:'+SWATCH+'px">'+pins.map(function(p,i){
-        const style=p.r? cropStyle(p.it,p.r)
-          : 'background-image:url('+urlFor(p.it.img&&p.it.img.key)+');background-size:cover;background-position:center;aspect-ratio:'+
-            (((p.it.img&&p.it.img.w)||3)/((p.it.img&&p.it.img.h)||2)).toFixed(4);
-        const clip=(p.r&&p.r.path&&p.r.path.length>2)?';clip-path:'+pathToClip(p.r.path):'';
-        const cap=p.r?(p.r.text||""):(p.it.title||"");
-        return '<figure class="bsw" data-pin="'+i+'" title="'+esc(cap||p.it.title||"")+'">'+
-          '<div class="img" style="'+style+clip+'"></div>'+
-          '<button class="unpin" data-unpin="'+i+'" title="빼기">'+ICON_X+'</button>'+
-        '</figure>';
-      }).join("")+'</div>'
-      : '<div class="blank"><h3>아직 담긴 게 없어요</h3><p>아카이브에서 조각의 핀을 눌러 담아보세요. 「좋아하는 부분만」으로 보면 재질 조각이 바로 보입니다.</p></div>')+
     (pins.length? '<div class="bsum">'+boardTagSummary(pins).map(g=>
         '<div class="bsumrow"><i class="dot" style="background:var('+g.cat.v+')"></i>'+
         '<span class="lbl">'+esc(g.cat.name)+'</span>'+
-        '<span class="bsumtags">'+g.tags.map(t=>'<span class="mini">'+esc(t[0])+(t[1]>1?' x'+t[1]:'')+'</span>').join("")+'</span></div>').join("")+
-      '</div>' : '');
+        '<span class="bsumtags">'+g.tags.map(t=>'<span class="mini">'+esc(t[0])+(t[1]>1?' x'+t[1]:'')+'</span>').join("")+
+        '</span></div>').join("")+'</div>' : '')+
+    '<div class="bcanvas" id="bcanvas">'+
+      '<div class="bstage" id="bstage">'+pins.map(pinHTML).join("")+'</div>'+
+      (pins.length?'':'<div class="bempty">아직 담긴 게 없어요.<br>아카이브에서 조각의 핀을 눌러 담아보세요.<br>「좋아하는 부분만」으로 보면 재질 조각이 바로 보입니다.</div>')+
+      '<div class="bhint">조각을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿔요.<br>빈 곳을 끌면 판이 움직이고, Ctrl+휠(두 손가락)로 확대·축소합니다. 두 번 누르면 원본이 열려요.</div>'+
+      '<div class="bzoom">'+
+        '<button id="bzOut" title="축소">−</button>'+
+        '<span class="pct" id="bzPct">100%</span>'+
+        '<button id="bzIn" title="확대">+</button>'+
+        '<button id="bzFit" title="화면 맞춤">⤢</button>'+
+      '</div>'+
+    '</div>';
 
   wireBoard(b,pins);
-  /* 사진이 아직 안 실렸으면 잠시 뒤 다시 그린다 (팔레트가 비지 않도록) */
-  if(pal.pending) setTimeout(function(){ if(VIEW==="board") renderBoard(); },420);
 }
 
-/* 보드를 한 장의 그림으로 저장한다 — 색 띠 + 조각들.
-   화면과 같은 구성이되 글자는 최소로. 시공사·친구에게 그대로 보낼 수 있게. */
+/* 고른 조각을 보드에서 뺀다 (사진 자체는 그대로) */
+function removeSelectedPin(){
+  const b=boardById(CURBOARD); if(!b||!BSEL) return;
+  b.pins=(b.pins||[]).filter(p=>pinKey(p.item,p.region)!==BSEL);
+  b.updatedAt=Date.now();
+  BSEL=null; saveBoards(); renderBoard();
+}
+
+/* 보드를 한 장의 그림으로 저장한다 — 화면에 놓인 그대로.
+   시공사·친구에게 그대로 보낼 수 있게, 글자는 이름과 날짜만 남긴다. */
 async function exportBoard(b,pins){
   if(!pins.length){ toast("담긴 게 없어요.",true); return; }
-  const COLS=Math.min(4,Math.max(2,Math.round(Math.sqrt(pins.length))));
-  const CELL=420, GAP=16, PAD=40, BAR=90;
-  const rows=Math.ceil(pins.length/COLS);
-  const W=PAD*2+COLS*CELL+(COLS-1)*GAP;
-  const H=PAD*2+BAR+GAP+rows*CELL+(rows-1)*GAP+56;
+  const PAD=48, FOOT=70;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  pins.forEach(p=>{
+    x0=Math.min(x0,p.pin.x); y0=Math.min(y0,p.pin.y);
+    x1=Math.max(x1,p.pin.x+pinW(p)); y1=Math.max(y1,p.pin.y+pinH(p));
+  });
+  const bw=Math.max(1,x1-x0), bh=Math.max(1,y1-y0);
+  const sc=clamp(Math.min(2,3600/(bw+PAD*2)),.4,2);   /* 너무 큰 캔버스는 만들 수 없다 */
+  const W=Math.round((bw+PAD*2)*sc), H=Math.round((bh+PAD*2+FOOT)*sc);
   const cv=document.createElement("canvas");
   cv.width=W; cv.height=H;
   const g=cv.getContext("2d");
   g.fillStyle="#EDECE6"; g.fillRect(0,0,W,H);
 
-  /* 색 띠 */
-  const pal=boardPalette(pins);
-  let x=PAD;
-  const barW=W-PAD*2;
-  pal.colors.forEach(c=>{
-    const w=Math.max(28,barW*c.pct);
-    g.fillStyle=c.hex; g.fillRect(x,PAD,w,BAR);
-    x+=w;
-  });
-  if(pal.colors.length){
-    g.strokeStyle="rgba(27,28,26,.15)"; g.lineWidth=1;
-    g.strokeRect(PAD+.5,PAD+.5,Math.min(barW,x-PAD)-1,BAR-1);
-  }
-
-  /* 조각들 */
-  for(let i=0;i<pins.length;i++){
-    const p=pins[i];
-    const cx=PAD+(i%COLS)*(CELL+GAP);
-    const cy=PAD+BAR+GAP+Math.floor(i/COLS)*(CELL+GAP);
+  for(const p of pins){
     const im=imgEl(p.it.img&&p.it.img.key);
+    const dx=(p.pin.x-x0+PAD)*sc, dy=(p.pin.y-y0+PAD)*sc;
+    const dw=pinW(p)*sc, dh=pinH(p)*sc;
     g.save();
-    g.beginPath(); g.rect(cx,cy,CELL,CELL); g.clip();
-    g.fillStyle="#E3E3DE"; g.fillRect(cx,cy,CELL,CELL);
+    g.beginPath(); g.rect(dx,dy,dw,dh); g.clip();
+    g.fillStyle="#E3E3DE"; g.fillRect(dx,dy,dw,dh);
     if(im&&im.complete&&im.naturalWidth){
       const iw=im.naturalWidth, ih=im.naturalHeight;
       const sx=p.r?p.r.x*iw:0, sy=p.r?p.r.y*ih:0;
       const sw=p.r?Math.max(1,p.r.w*iw):iw, sh=p.r?Math.max(1,p.r.h*ih):ih;
-      const sc=Math.max(CELL/sw,CELL/sh);
-      g.drawImage(im,sx,sy,sw,sh,
-        cx+CELL/2-sw*sc/2, cy+CELL/2-sh*sc/2, sw*sc, sh*sc);
+      const k=Math.max(dw/sw,dh/sh);
+      g.drawImage(im,sx,sy,sw,sh, dx+dw/2-sw*k/2, dy+dh/2-sh*k/2, sw*k, sh*k);
     }
     g.restore();
     g.strokeStyle="rgba(27,28,26,.18)"; g.lineWidth=1;
-    g.strokeRect(cx+.5,cy+.5,CELL-1,CELL-1);
+    g.strokeRect(dx+.5,dy+.5,dw-1,dh-1);
   }
 
-  /* 이름 */
   g.fillStyle="#1B1C1A";
-  g.font='500 26px "IBM Plex Sans KR","IBM Plex Sans",sans-serif';
+  g.font='500 '+Math.round(26*sc)+'px "IBM Plex Sans KR","IBM Plex Sans",sans-serif';
   g.textBaseline="alphabetic";
-  g.fillText(b.name, PAD, H-PAD+8);
+  g.fillText(b.name, PAD*sc, H-Math.round(38*sc));
   g.fillStyle="#8A9099";
-  g.font='400 18px "IBM Plex Mono",monospace';
+  g.font='400 '+Math.round(18*sc)+'px "IBM Plex Mono",monospace';
   const stamp=new Date().toISOString().slice(0,10);
-  g.fillText(pins.length+"조각 · "+stamp, PAD, H-PAD+34);
+  g.fillText(pins.length+"조각 · "+stamp, PAD*sc, H-Math.round(14*sc));
 
   const blob=await new Promise(res=>cv.toBlob(res,"image/png"));
   if(!blob){ toast("이미지를 만들지 못했어요.",true); return; }
@@ -1753,13 +2048,13 @@ function newBoardPrompt(){
   if(name===null) return;
   const b=ensureBoard(name);
   if(!b){ toast("이름을 적어주세요.",true); return; }
-  CURBOARD=b.id; saveBoards(); renderBoard();
+  CURBOARD=b.id; BSEL=null; saveBoards(); renderBoard();
 }
 
 function wireBoard(b,pins){
   const box=$("#board");
   const on=(id,ev,fn)=>{ const el=box.querySelector(id); if(el) el.addEventListener(ev,fn); };
-  on("#bPick","change",e=>{ CURBOARD=e.target.value; renderBoard(); });
+  on("#bPick","change",e=>{ CURBOARD=e.target.value; BSEL=null; renderBoard(); });
   on("#bNew","click",newBoardPrompt);
   on("#bRename","click",()=>{
     const n=prompt("보드 이름",b.name);
@@ -1771,26 +2066,182 @@ function wireBoard(b,pins){
   on("#bDel","click",()=>{
     if(!confirm('"'+b.name+'" 보드를 지웁니다. 사진과 메모는 그대로 남아요.')) return;
     ST.boards=(ST.boards||[]).filter(x=>x.id!==b.id);
-    CURBOARD=null; saveBoards(); renderBoard();
-  });
-  on("#bSize","input",e=>{
-    SWATCH=+e.target.value;
-    const g=box.querySelector(".bgrid");
-    if(g) g.style.setProperty("--sw",SWATCH+"px");
+    BVIEW.delete(b.id);
+    CURBOARD=null; BSEL=null; saveBoards(); renderBoard();
   });
   on("#bExport","click",()=>exportBoard(b,pins));
+  on("#bTidy","click",()=>{
+    layoutPins(b,pins,true);
+    b.updatedAt=Date.now(); saveBoards(); renderBoard();
+  });
+
+  const cv=box.querySelector("#bcanvas"), stage=box.querySelector("#bstage");
+  if(!cv||!stage) return;
+  const view=boardView(b.id);
+
+  function apply(){
+    stage.style.transform="translate("+view.x+"px,"+view.y+"px) scale("+view.z+")";
+    cv.style.backgroundSize=(24*view.z)+"px "+(24*view.z)+"px";
+    cv.style.backgroundPosition=view.x+"px "+view.y+"px";
+    const pct=box.querySelector("#bzPct");
+    if(pct) pct.textContent=Math.round(view.z*100)+"%";
+  }
+  function zoomAt(cx,cy,f){
+    const z=clamp(view.z*f,.08,4);
+    if(z===view.z) return;
+    const k=z/view.z;
+    view.x=cx-(cx-view.x)*k;
+    view.y=cy-(cy-view.y)*k;
+    view.z=z; apply();
+  }
+  function fit(){
+    if(!pins.length){ view.x=60; view.y=60; view.z=1; apply(); return; }
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    pins.forEach(p=>{
+      x0=Math.min(x0,p.pin.x); y0=Math.min(y0,p.pin.y);
+      x1=Math.max(x1,p.pin.x+pinW(p)); y1=Math.max(y1,p.pin.y+pinH(p));
+    });
+    const w=Math.max(1,x1-x0), h=Math.max(1,y1-y0);
+    const cw=Math.max(80,cv.clientWidth-80), ch=Math.max(80,cv.clientHeight-80);
+    view.z=clamp(Math.min(cw/w,ch/h),.08,1.6);
+    view.x=(cv.clientWidth-w*view.z)/2-x0*view.z;
+    view.y=(cv.clientHeight-h*view.z)/2-y0*view.z;
+    apply();
+  }
+  apply();
+  if(!view.seen){ view.seen=true; fit(); }
+
+  on("#bFit","click",fit);
+  on("#bzFit","click",fit);
+  on("#bzIn","click",()=>zoomAt(cv.clientWidth/2,cv.clientHeight/2,1.25));
+  on("#bzOut","click",()=>zoomAt(cv.clientWidth/2,cv.clientHeight/2,.8));
+
+  cv.addEventListener("wheel",e=>{
+    e.preventDefault();
+    const r=cv.getBoundingClientRect();
+    if(e.ctrlKey||e.metaKey) zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*0.0022));
+    else{ view.x-=e.deltaX; view.y-=e.deltaY; apply(); }
+  },{passive:false});
+
+  /* 고르기 — 테두리만 바꾸고 다시 그리지는 않는다 */
+  function selectPin(p){
+    BSEL=p?pinKey(p.it.id,p.r&&p.r.id):null;
+    stage.querySelectorAll(".bpin").forEach(el=>{
+      const q=pins[+el.dataset.pin];
+      el.classList.toggle("on",!!q&&BSEL===pinKey(q.it.id,q.r&&q.r.id));
+    });
+  }
+
+  /* 끌기 — 조각 옮기기 / 크기 바꾸기 / 판 옮기기 / 두 손가락 확대 */
+  const active=new Map();
+  let mode=null, st=null;
+  const pts=()=>Array.from(active.values());
+  function pinchStart(){
+    const a=pts()[0], c=pts()[1];
+    const r=cv.getBoundingClientRect();
+    return {d:Math.hypot(a.x-c.x,a.y-c.y)||1,
+      mx:(a.x+c.x)/2-r.left, my:(a.y+c.y)/2-r.top,
+      vx:view.x, vy:view.y, z:view.z};
+  }
+  cv.addEventListener("pointerdown",e=>{
+    if(e.target.closest("[data-unpin]")) return;
+    active.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+    if(active.size===2){
+      if(st&&st.el) st.el.classList.remove("moving");
+      mode="pinch"; st=pinchStart(); cv.classList.remove("drag");
+      return;
+    }
+    if(active.size>2) return;
+    const grip=e.target.closest("[data-grip]");
+    const fig=e.target.closest(".bpin");
+    if(grip&&fig){
+      const p=pins[+fig.dataset.pin]; if(!p) return;
+      mode="size"; st={x:e.clientX,y:e.clientY,p:p,el:fig,w:pinW(p),moved:false};
+      fig.classList.add("moving");
+      selectPin(p);
+    }else if(fig){
+      const p=pins[+fig.dataset.pin]; if(!p) return;
+      mode="move"; st={x:e.clientX,y:e.clientY,p:p,el:fig,px:p.pin.x,py:p.pin.y,moved:false};
+      fig.classList.add("moving");
+      stage.appendChild(fig);                     /* 잡은 조각을 맨 위로 */
+      const i=(b.pins||[]).indexOf(p.pin);
+      if(i>=0){ b.pins.splice(i,1); b.pins.push(p.pin); }
+      selectPin(p);
+    }else{
+      mode="pan"; st={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};
+      cv.classList.add("drag");
+      selectPin(null);
+    }
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!active.has(e.pointerId)) return;
+    active.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(mode==="pinch"){
+      if(active.size<2) return;
+      const a=pts()[0], c=pts()[1];
+      const r=cv.getBoundingClientRect();
+      const d=Math.hypot(a.x-c.x,a.y-c.y)||1;
+      const mx=(a.x+c.x)/2-r.left, my=(a.y+c.y)/2-r.top;
+      const z=clamp(st.z*(d/st.d),.08,4);
+      const wx=(st.mx-st.vx)/st.z, wy=(st.my-st.vy)/st.z;
+      view.z=z; view.x=mx-wx*z; view.y=my-wy*z;
+      apply(); return;
+    }
+    if(!st) return;
+    if(mode==="move"){
+      const dx=(e.clientX-st.x)/view.z, dy=(e.clientY-st.y)/view.z;
+      st.p.pin.x=Math.round(st.px+dx);
+      st.p.pin.y=Math.round(st.py+dy);
+      st.el.style.left=st.p.pin.x+"px";
+      st.el.style.top=st.p.pin.y+"px";
+      if(Math.abs(dx*view.z)>3||Math.abs(dy*view.z)>3) st.moved=true;
+    }else if(mode==="size"){
+      const w=clamp(Math.round(st.w+(e.clientX-st.x)/view.z),60,3000);
+      st.p.pin.w=w;
+      st.el.style.width=w+"px";
+      st.el.style.height=pinH(st.p)+"px";
+      st.moved=true;
+    }else if(mode==="pan"){
+      view.x=st.vx+(e.clientX-st.x);
+      view.y=st.vy+(e.clientY-st.y);
+      apply();
+    }
+  });
+  function endPointer(e){
+    active.delete(e.pointerId);
+    try{ cv.releasePointerCapture(e.pointerId); }catch(_){}
+    if(mode==="pinch"){
+      if(active.size>=2){ st=pinchStart(); return; }
+      if(active.size===1){
+        const a=pts()[0];
+        mode="pan"; st={x:a.x,y:a.y,vx:view.x,vy:view.y};
+        return;
+      }
+      mode=null; st=null; return;
+    }
+    if((mode==="move"||mode==="size")&&st){
+      st.el.classList.remove("moving");
+      if(st.moved){ b.updatedAt=Date.now(); saveBoards(); }
+    }
+    cv.classList.remove("drag");
+    if(!active.size){ mode=null; st=null; }
+  }
+  cv.addEventListener("pointerup",endPointer);
+  cv.addEventListener("pointercancel",endPointer);
+
+  stage.addEventListener("dblclick",e=>{
+    const fig=e.target.closest(".bpin"); if(!fig) return;
+    const p=pins[+fig.dataset.pin];
+    if(p) openItem(p.it.id,p.r&&p.r.id);
+  });
+
   box.querySelectorAll("[data-unpin]").forEach(btn=>{
     btn.addEventListener("click",e=>{
       e.stopPropagation();
       const p=pins[+btn.dataset.unpin];
       if(p) togglePin(b,p.it.id,p.r&&p.r.id);
-      renderBoard();
-    });
-  });
-  box.querySelectorAll("[data-pin]").forEach(fig=>{
-    fig.addEventListener("click",()=>{
-      const p=pins[+fig.dataset.pin];
-      if(p) openItem(p.it.id,p.r&&p.r.id);
+      BSEL=null; renderBoard();
     });
   });
 }
@@ -1812,8 +2263,10 @@ function cardHTML(it){
   const n=(it.regions||[]).length;
   const ratio=it.img&&it.img.w?(it.img.h/it.img.w*100):66;
   const title=it.title?'<div class="t">'+esc(it.title)+'</div>':'<div class="t none">제목 없음</div>';
-  return '<article class="card" data-open="'+it.id+'" tabindex="0">'+
-    pinBtnHTML(it.id,null)+
+  const sp=it.space?spaceById(it.space):null;
+  return '<article class="card'+(PICKMODE&&PICK.has(it.id)?" picked":"")+'" data-open="'+it.id+'" tabindex="0">'+
+    (PICKMODE?'<span class="tick">'+ICON_CHECK+'</span>':pinBtnHTML(it.id,null))+
+    (PICKMODE&&sp?'<span class="inspace">'+esc(sp.name)+'</span>':"")+
     (n?'<div class="pins"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1"/><rect x="5" y="6" width="5" height="4" rx=".5" fill="currentColor" opacity=".35"/></svg>'+n+'</div>':"")+
     '<img loading="lazy" src="'+urlFor(it.img&&it.img.key)+'" alt="" style="aspect-ratio:'+(it.img&&it.img.w? it.img.w+"/"+it.img.h : "3/2")+'">'+
     '<div class="meta">'+title+(tg||more?'<div class="row">'+tg+more+'</div>':"")+'</div></article>';
@@ -1890,12 +2343,34 @@ function renderArchive(){
     : (FILTER.q.trim()? "‘"+FILTER.q.trim()+"’ 검색" : (MODE==="region"?"좋아하는 부분":"모든 구석"));
   $("#stat").textContent = total? total+" 장" : "";
   $$("#modeSw button").forEach(b=>b.setAttribute("aria-selected",b.dataset.mode===MODE?"true":"false"));
-  $("#modeSw").hidden = total===0;
+  $("#modeSw").hidden = total===0||PICKMODE;
+  const gb=$("#btnGroup");
+  if(gb){
+    gb.hidden = total===0 || MODE==="region";
+    gb.textContent = PICKMODE? "고르기 그만두기" : "공간으로 묶기";
+    gb.classList.toggle("primary",PICKMODE);
+  }
   renderVaultUI();
   renderChips();
+  renderSelBar();
+  const gcls = PICKMODE? "grid picking" : "grid";
   const wrap=$("#gridWrap");
-  if(!total){ $("#viewSub").textContent="아직 기록이 없어요";
-    wrap.innerHTML=(FOLDER_UI&&!Vault.ok)?"":blankHTML(); return; }
+
+  /* 아직 사진이 없어도, 먼저 만들어 둔 공간 안이면 그 공간을 보여준다 */
+  if(!total){
+    const sp0=INSPACE?spaceById(INSPACE):null;
+    if(sp0){
+      $("#viewTitle").textContent=sp0.name;
+      $("#viewSub").textContent="아직 0장";
+      wrap.innerHTML=spaceHeadHTML(sp0)+
+        '<div class="blank"><h3>이 공간의 첫 장면</h3><p>여기서 올리는 사진은 자동으로 이 공간에 담깁니다. 같은 자리를 각도만 달리해 찍은 것들을 모아 보세요.</p>'+
+        '<button class="btn primary" data-add>사진 고르기</button></div>';
+      wireSpaceHead(sp0);
+      return;
+    }
+    $("#viewSub").textContent="아직 기록이 없어요";
+    wrap.innerHTML=(FOLDER_UI&&!Vault.ok)?"":blankHTML(); return;
+  }
 
   if(MODE==="region"){
     const list=filteredRegions();
@@ -1924,9 +2399,13 @@ function renderArchive(){
     $("#viewTitle").textContent=sp.name;
     $("#viewSub").textContent=mine.length+"장";
     wrap.innerHTML=spaceHeadHTML(sp)+
-      (mine.length? '<div class="grid">'+mine.map(cardHTML).join("")+'</div>'
-                  : '<div class="blank"><h3>이 공간엔 아직 없네요</h3><p>거른 조건을 지우면 다시 보일 수 있어요.</p></div>');
+      (mine.length? '<div class="'+gcls+'">'+mine.map(cardHTML).join("")+'</div>'
+       : (spaceItems(sp.id).length
+          ? '<div class="blank"><h3>이 공간엔 아직 없네요</h3><p>거른 조건을 지우면 다시 보일 수 있어요.</p></div>'
+          : '<div class="blank"><h3>이 공간의 첫 장면</h3><p>여기서 올리는 사진은 자동으로 이 공간에 담깁니다.</p>'+
+            '<button class="btn primary" data-add>사진 고르기</button></div>'));
     wireSpaceHead(sp);
+    updateBulkBtn();
     return;
   }
 
@@ -1934,6 +2413,13 @@ function renderArchive(){
     : list.length+"장 / 전체 "+total+"장";
   if(!list.length){
     wrap.innerHTML='<div class="blank"><h3>여기엔 아직 없네요</h3><p>다른 태그를 골라보거나 검색어를 지워보세요.</p></div>';
+    return;
+  }
+
+  /* 고르는 중에는 전부 낱장으로 — 공간 카드로 접혀 있으면 고를 수가 없다 */
+  if(PICKMODE){
+    wrap.innerHTML='<div class="'+gcls+'">'+list.map(cardHTML).join("")+'</div>';
+    const bp=$("#bulkPin"); if(bp) bp.hidden=true;
     return;
   }
 
@@ -1948,6 +2434,14 @@ function renderArchive(){
     const shown=list.filter(x=>x.space===sp.id).length;
     const all=spaceItems(sp.id).length;
     cards.push({t:it.createdAt,html:spaceCardHTML(sp,shown,all)});
+  }
+  /* 먼저 만들어 두고 아직 안 채운 공간도 보여준다 — 안 그러면 찾아갈 길이 없다.
+     거르는 중일 때는 빼둔다 (거른 결과에 섞이면 헷갈리니까) */
+  if(!FILTER.tags.size&&!FILTER.q.trim()){
+    (ST.spaces||[]).forEach(sp=>{
+      if(seen.has(sp.id)||spaceItems(sp.id).length) return;
+      cards.push({t:sp.createdAt||0,html:spaceCardHTML(sp,0,0)});
+    });
   }
   cards.sort((a,b)=>b.t-a.t);
   wrap.innerHTML='<div class="grid">'+cards.map(c=>c.html).join("")+'</div>';
@@ -2074,7 +2568,11 @@ async function vaultWriteTags(){
   Vault.busy++;
   try{
     const payload={app:"gusuk",v:1,updatedAt:Date.now(),
-      tags:ST.tags.map(t=>({name:t.name,cat:t.cat}))};
+      tags:ST.tags.map(t=>{
+        const o={name:t.name,cat:t.cat};
+        if(t.auto===false) o.manual=true;   /* 사람이 고른 부문 — 자동 판정이 덮지 않게 */
+        return o;
+      })};
     Vault.tagsSeen=await writeText(Vault.dir,"tags.json",JSON.stringify(payload,null,1));
   }catch(e){ vaultTrouble(e); }
   finally{ Vault.busy--; }
@@ -2084,7 +2582,7 @@ async function vaultWriteSpaces(){
   Vault.busy++;
   try{
     const payload={app:"gusuk",v:1,updatedAt:Date.now(),
-      spaces:(ST.spaces||[]).map(sp=>({name:sp.name,note:sp.note||"",
+      spaces:(ST.spaces||[]).map(sp=>({name:sp.name,note:sp.note||"",keep:!!sp.keep,
         facts:(sp.facts||[]).map(f=>({k:f.k,v:f.v}))}))};
     Vault.spacesSeen=await writeText(Vault.dir,"spaces.json",JSON.stringify(payload,null,1));
   }catch(e){ vaultTrouble(e); }
@@ -2098,6 +2596,7 @@ function applySpaceMeta(list){
     const sp=ensureSpace(rec.name);
     if(!sp) return;
     sp.note=rec.note||"";
+    if(rec.keep) sp.keep=true;      /* 아직 비어 있어도 남겨둘 공간 */
     sp.facts=Array.isArray(rec.facts)?rec.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")})):[];
   });
 }
@@ -2108,7 +2607,12 @@ async function vaultWriteBoards(){
   try{
     const payload={app:"gusuk",v:1,updatedAt:Date.now(),
       boards:(ST.boards||[]).map(b=>({name:b.name,note:b.note||"",
-        pins:(b.pins||[]).map(p=>({item:p.item,region:p.region||null}))}))};
+        pins:(b.pins||[]).map(p=>{
+          const o={item:p.item,region:p.region||null};
+          if(isFinite(p.x)&&isFinite(p.y)){ o.x=Math.round(p.x); o.y=Math.round(p.y); }
+          if(isFinite(p.w)) o.w=Math.round(p.w);
+          return o;
+        })}))};
     Vault.boardsSeen=await writeText(Vault.dir,"boards.json",JSON.stringify(payload,null,1));
   }catch(e){ vaultTrouble(e); }
   finally{ Vault.busy--; }
@@ -2119,7 +2623,12 @@ function applyBoards(list){
     const old=keep.get(b.name);
     return {id:old?old.id:uid("b"),name:b.name,note:b.note||"",
       pins:Array.isArray(b.pins)?b.pins.filter(p=>p&&p.item)
-        .map(p=>({item:String(p.item),region:p.region||null})):[],
+        .map(p=>{
+          const o={item:String(p.item),region:p.region||null};
+          if(isFinite(+p.x)&&isFinite(+p.y)){ o.x=+p.x; o.y=+p.y; }
+          if(isFinite(+p.w)) o.w=+p.w;
+          return o;
+        }):[],
       createdAt:old?old.createdAt:Date.now(),updatedAt:Date.now()};
   });
   pruneBoards();
@@ -2176,7 +2685,7 @@ async function vaultLoadAll(){
     spaceMeta=d.spaces||[];
   }catch(e){ /* 아직 없음 */ }
   ST.tags=[]; ST.spaces=[]; Vault.seen.clear();
-  tags.forEach(t=>ensureTag(t.name,t.cat));
+  tags.forEach(t=>ensureTag(t.name,t.cat,!!t.manual));
   applySpaceMeta(spaceMeta);
   let broken=[];
   try{
@@ -2236,7 +2745,7 @@ async function vaultSync(quiet){
       if(f.lastModified>Vault.tagsSeen){
         Vault.tagsSeen=f.lastModified;
         const d=JSON.parse(await f.text());
-        (d.tags||[]).forEach(t=>ensureTag(t.name,t.cat));
+        (d.tags||[]).forEach(t=>ensureTag(t.name,t.cat,!!t.manual));
         changed=true;
       }
     }catch(e){}
@@ -2861,7 +3370,13 @@ function TagField(host,getIds,setIds,placeholder){
       const t=tagById(id); if(!t) return;
       const chip=document.createElement("span");
       chip.className="chip";
-      chip.innerHTML='<i class="dot" style="background:var('+CATMAP[t.cat].v+')"></i>'+esc(t.name)+'<button class="x" title="빼기">'+ICON_X+'</button>';
+      chip.innerHTML='<i class="dot" style="background:var('+CATMAP[t.cat].v+')"></i>'+
+        '<button class="nm" title="눌러서 고치기 (Enter 로 확정)"><b class="hash">#</b>'+esc(t.name)+'</button>'+
+        '<button class="x" title="빼기">'+ICON_X+'</button>';
+      chip.querySelector(".nm").addEventListener("click",e=>{
+        e.stopPropagation(); e.preventDefault();
+        editChip(chip,t);
+      });
       chip.querySelector(".x").addEventListener("click",e=>{
         e.stopPropagation();
         setIds(getIds().filter(x=>x!==id)); paint(); afterChange();
@@ -2869,10 +3384,40 @@ function TagField(host,getIds,setIds,placeholder){
       field.insertBefore(chip,input);
     });
   }
+  /* 마크다운에서 #뒤에 적고 Enter 로 태그를 만드는 것과 같은 손놀림으로,
+     이미 붙은 태그도 그 자리에서 고친다. 이름을 바꾸면 그 태그가 붙은
+     모든 사진에 반영되고, 이미 있는 이름을 적으면 하나로 합쳐진다. */
+  function editChip(chip,t){
+    if(chip.classList.contains("editing")) return;
+    chip.classList.add("editing");
+    const ed=document.createElement("input");
+    ed.type="text"; ed.className="ed"; ed.value=t.name;
+    ed.setAttribute("aria-label","태그 이름 고치기");
+    chip.innerHTML='<i class="dot" style="background:var('+CATMAP[t.cat].v+')"></i><b class="hash">#</b>';
+    chip.appendChild(ed);
+    const fit=()=>{ ed.style.width=Math.max(40,(ed.value.length+1)*8.6)+"px"; };
+    fit();
+    let done=false;
+    const finish=keep=>{
+      if(done) return; done=true;
+      const v=ed.value.replace(/^[#＃]+/,"").trim();
+      chip.classList.remove("editing");
+      if(!keep||!v||v===t.name){ paint(); return; }
+      if(!renameTag(t.id,v)) paint();      /* 못 바꿨으면 원래 이름으로 되돌린다 */
+    };
+    ed.addEventListener("input",fit);
+    ed.addEventListener("keydown",e=>{
+      e.stopPropagation();
+      if(e.key==="Enter"){ e.preventDefault(); finish(true); }
+      else if(e.key==="Escape"){ e.preventDefault(); finish(false); }
+    });
+    ed.addEventListener("blur",()=>finish(true));
+    ed.focus(); ed.select();
+  }
   function afterChange(){ pruneTags(); save(CUR); renderRail(); renderArchive(); graphDirty(); }
 
   function commit(name,cat){
-    const t=ensureTag(name,cat); if(!t) return;
+    const t=ensureTag(String(name||"").replace(/^[#＃]+/,""),cat); if(!t) return;
     const ids=getIds();
     if(ids.indexOf(t.id)<0) setIds(ids.concat([t.id]));
     input.value=""; paint(); hide(); afterChange();
@@ -2880,7 +3425,7 @@ function TagField(host,getIds,setIds,placeholder){
   function hide(){ sugbox.hidden=true; sugbox.innerHTML=""; rows=[]; cursor=-1; }
 
   function show(){
-    const q=input.value.trim().toLowerCase();
+    const q=input.value.replace(/^[#＃]+/,"").trim().toLowerCase();
     const has=new Set(getIds());
     const out=[];
     ST.tags.filter(t=>!has.has(t.id)&&(!q||t.name.toLowerCase().indexOf(q)>=0))
@@ -2893,14 +3438,16 @@ function TagField(host,getIds,setIds,placeholder){
       out.push({kind:"sug",name:s,cat:c.id});
     }));
     const exact=q&&!ST.tags.some(t=>t.name.toLowerCase()===q)&&!out.some(o=>o.kind==="sug"&&o.name.toLowerCase()===q);
-    if(exact) out.unshift({kind:"new",name:input.value.trim()});
+    if(exact) out.unshift({kind:"new",name:input.value.replace(/^[#＃]+/,"").trim()});
     if(!out.length){ hide(); return; }
     rows=out;
     sugbox.innerHTML=out.map((o,i)=>{
       if(o.kind==="tag") return '<button data-i="'+i+'"><i class="dot" style="background:var('+CATMAP[o.tag.cat].v+')"></i>'+esc(o.tag.name)+'<span class="k">'+tagCount(o.tag.id)+'</span></button>';
       if(o.kind==="sug") return '<button data-i="'+i+'"><i class="dot" style="background:var('+CATMAP[o.cat].v+')"></i>'+esc(o.name)+'<span class="k">'+esc(CATMAP[o.cat].name)+'</span></button>';
-      return '<button data-i="'+i+'"><i class="dot" style="background:var(--c-etc)"></i>‘'+esc(o.name)+'’ 새로 만들기<span class="k">'+
-        CATS.map(c=>'<i class="dot catpick" data-cat="'+c.id+'" title="'+esc(c.name)+'" style="background:var('+c.v+');width:8px;height:8px;display:inline-block;margin-left:3px;border-radius:50%;cursor:pointer"></i>').join("")+'</span></button>';
+      const g=guessCat(o.name);
+      return '<button data-i="'+i+'"><i class="dot" style="background:var('+CATMAP[g].v+')"></i>‘'+esc(o.name)+'’ 새로 만들기<span class="k">'+
+        (g!=="etc"?'<span style="margin-right:5px">'+esc(CATMAP[g].name)+'</span>':"")+
+        CATS.map(c=>'<i class="dot catpick" data-cat="'+c.id+'" title="'+esc(c.name)+'" style="background:var('+c.v+');width:8px;height:8px;display:inline-block;margin-left:3px;border-radius:50%;cursor:pointer;outline:'+(c.id===g?'1px solid var(--ink-2);outline-offset:1px':'none')+'"></i>').join("")+'</span></button>';
     }).join("");
     sugbox.hidden=false;
     Array.prototype.slice.call(sugbox.querySelectorAll("button")).forEach(b=>{
@@ -2934,7 +3481,7 @@ function TagField(host,getIds,setIds,placeholder){
       if(cursor>=0&&rows[cursor]){
         const o=rows[cursor];
         commit(o.kind==="tag"?o.tag.name:o.name, o.kind==="tag"?o.tag.cat:(o.cat||null));
-      }else if(input.value.trim()) commit(input.value.trim());
+      }else if(input.value.replace(/^[#＃]+/,"").trim()) commit(input.value);
     }else if(e.key==="Escape"){ if(!sugbox.hidden){e.stopPropagation();hide();} }
     else if(e.key==="Backspace"&&!input.value){
       const ids=getIds(); if(ids.length){ setIds(ids.slice(0,-1)); paint(); afterChange(); }
@@ -3067,7 +3614,7 @@ function renderPanel(){
   sheetEl.querySelector("#pDate").textContent=fmtDate(CUR.createdAt);
   const n=sheetEl.querySelector("#pNote");
   n.value=CUR.note||""; autoGrow(n);
-  PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"색, 소재, 분위기…");
+  PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"#색  #소재  #분위기 … 적고 Enter");
   renderAuto();
   renderSpacePick();
   renderLinks();
@@ -3182,7 +3729,7 @@ function renderRegions(){
     ta.value=r.text||""; autoGrow(ta);
     ta.addEventListener("input",()=>{r.text=ta.value;autoGrow(ta);save(CUR);});
     ta.addEventListener("focus",()=>selectRegion(r.id,false));
-    TagField(box.querySelector('[data-rgtags="'+r.id+'"]'),()=>r.tags||[],ids=>{r.tags=ids;},"이 부분의 태그");
+    TagField(box.querySelector('[data-rgtags="'+r.id+'"]'),()=>r.tags||[],ids=>{r.tags=ids;},"#태그 적고 Enter");
   });
   box.querySelectorAll(".rgitem").forEach(el=>{
     el.addEventListener("mouseenter",()=>hoverRegion(el.dataset.rg,true));
@@ -3969,7 +4516,7 @@ async function importFiles(files){
     catch(e){ toast(f.name+" 을(를) 읽지 못했어요.",true); continue; }
     if(!data||data.app!=="gusuk"||!Array.isArray(data.items)){ toast(f.name+" 은(는) 이 아카이브의 백업이 아니에요.",true); continue; }
     const remap=new Map();
-    (data.tags||[]).forEach(t=>{ const nt=ensureTag(t.name,t.cat); if(nt) remap.set(t.id,nt.id); });
+    (data.tags||[]).forEach(t=>{ const nt=ensureTag(t.name,t.cat,t.auto===false); if(nt) remap.set(t.id,nt.id); });
     /* 보드는 이름으로 맞추고 핀은 합집합으로 — 같은 프로젝트면 이어붙는다 */
     (data.boards||[]).forEach(rb=>{
       if(!rb||!rb.name) return;
@@ -3978,7 +4525,11 @@ async function importFiles(files){
       if(rb.note&&!nb.note) nb.note=rb.note;
       (rb.pins||[]).forEach(p=>{
         if(!p||!p.item) return;
-        if(!boardHas(nb,p.item,p.region)) nb.pins.push({item:p.item,region:p.region||null});
+        if(boardHas(nb,p.item,p.region)) return;
+        const np={item:p.item,region:p.region||null};
+        if(isFinite(+p.x)&&isFinite(+p.y)){ np.x=+p.x; np.y=+p.y; }
+        if(isFinite(+p.w)) np.w=+p.w;
+        nb.pins.push(np);
       });
     });
     /* 공간도 id 가 아니라 이름으로 맞춘다 — 다른 기기에서 온 백업이어도 같은 이름이면 합쳐진다 */
@@ -3987,6 +4538,7 @@ async function importFiles(files){
       const ns=ensureSpace(sp.name); if(!ns) return;
       spmap.set(sp.id,ns.id);
       if(sp.note&&!ns.note) ns.note=sp.note;
+      if(sp.keep) ns.keep=true;
       if(Array.isArray(sp.facts)&&!(ns.facts||[]).length)
         ns.facts=sp.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")}));
     });
@@ -4035,6 +4587,8 @@ async function importFiles(files){
 /* ══ 화면 전환 · 배선 ═════════════════════════════════ */
 let VIEW="archive";
 function setView(v){
+  /* 다른 화면으로 넘어가면 고르기는 끝난다 — 돌아왔을 때 체크가 남아 있지 않게 */
+  if(v!=="archive"&&PICKMODE){ PICKMODE=false; PICK.clear(); renderArchive(); }
   VIEW=v; graphOn=(v==="graph");
   const boardOn=(v==="board");
   $$("#viewSw button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===v?"true":"false"));
@@ -4101,11 +4655,24 @@ function wire(){
   $$('input[name="mode"]').forEach(r=>r.addEventListener("change",()=>{
     FILTER.mode=$('input[name="mode"]:checked').value; renderArchive();
   }));
-  $$("#modeSw button").forEach(b=>b.addEventListener("click",()=>{ MODE=b.dataset.mode; renderArchive(); }));
+  $$("#modeSw button").forEach(b=>b.addEventListener("click",()=>{
+    MODE=b.dataset.mode;
+    if(MODE!=="photo"&&PICKMODE){ PICKMODE=false; PICK.clear(); }
+    renderArchive();
+  }));
   $("#bulkPin").addEventListener("click",bulkPin);
+  $("#btnNewSpace").addEventListener("click",newSpacePrompt);
+  $("#btnGroup").addEventListener("click",()=>{ PICKMODE?endPick():startPick(); });
   $("#gridWrap").addEventListener("click",e=>{
     if(ctxSuppressClick){ ctxSuppressClick=false; return; }
     if(e.target.closest("[data-add]")){ $("#filePick").click(); return; }
+    /* 고르는 중에는 카드를 눌러도 열리지 않고 골라진다 */
+    if(PICKMODE){
+      if(e.target.closest(".spacehead")) return;
+      const pc=e.target.closest(".card[data-open]");
+      if(pc){ e.preventDefault(); togglePick(pc.dataset.open); }
+      return;
+    }
     if(e.target.closest(".spacehead")) return;   /* 머리말 입력칸은 그냥 둔다 */
     const pb=e.target.closest("[data-pinadd]");
     if(pb){ e.stopPropagation(); handlePinClick(pb); return; }
@@ -4115,6 +4682,7 @@ function wire(){
   });
   /* 우클릭 → 메뉴 */
   $("#gridWrap").addEventListener("contextmenu",e=>{
+    if(PICKMODE) return;
     const card=e.target.closest(".card[data-open]");
     if(!card) return;
     e.preventDefault();
@@ -4126,7 +4694,7 @@ function wire(){
   let holdTimer=null, holdFrom=null;
   const cancelHold=()=>{ clearTimeout(holdTimer); holdTimer=null; holdFrom=null; };
   $("#gridWrap").addEventListener("pointerdown",e=>{
-    if(e.pointerType==="mouse") return;          /* 마우스는 우클릭으로 */
+    if(e.pointerType==="mouse"||PICKMODE) return;   /* 마우스는 우클릭으로 */
     const card=e.target.closest(".card[data-open]");
     if(!card||e.target.closest("[data-pinadd]")) return;
     holdFrom={x:e.clientX,y:e.clientY};
@@ -4185,6 +4753,7 @@ function wire(){
     const typing=tag==="input"||tag==="textarea";
     if(e.key==="Escape"){
       if(ctxEl){ closeCtx(); return; }
+      if(PICKMODE&&!(sheetEl&&!sheetEl.hidden)){ endPick(); return; }
       const scrim=document.querySelector(".scrim");
       if(scrim){ scrim.remove(); return; }
       if(Rail.isOpen){ Rail.close(); return; }
@@ -4201,6 +4770,9 @@ function wire(){
         e.preventDefault();
         const t=cardTarget(hoverCard);
         if(t) pinTo(ensureCurrentBoard(),t.item,t.region);
+      }
+      else if((e.key==="Delete"||e.key==="Backspace")&&VIEW==="board"&&BSEL){
+        e.preventDefault(); removeSelectedPin();
       }
       else if(e.key==="/"){ e.preventDefault(); $("#q").focus(); }
       else if(e.key==="g"||e.key==="G") setView(VIEW==="graph"?"archive":"graph");
@@ -4263,6 +4835,7 @@ async function intakeFromOutside(){
       ST.spaces=ST.spaces||[]; ST.boards=ST.boards||[];
       ST.items.forEach(it=>{ it.tags=it.tags||[]; it.regions=it.regions||[]; it.links=it.links||[];
         if(it.space===undefined) it.space=null; });
+      if(adoptTagCats()) save();
       await hydrateURLs();
     }
   }catch(e){
