@@ -217,6 +217,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .head h1{font-family:var(--f-display);font-weight:400;font-size:30px;line-height:1.15;margin:0;text-wrap:balance}
 /* 공간에서 빠져나오는 길 — 제목 바로 위, 눈이 먼저 닿는 자리에 둔다 */
 .back-all{margin-bottom:9px}
+/* 공간에 관한 두 버튼은 한 덩어리로 — 하는 일이 이어져 있으니 사이를 좁힌다 */
+.headgrp{display:flex;align-items:center;gap:6px}
 .head .sub{margin:5px 0 0;color:var(--muted);font-size:13px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:18px;min-height:0}
 .chips:empty{display:none}
@@ -706,13 +708,25 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .gpanel{position:absolute;top:16px;left:16px;width:224px;background:var(--card);
   border:1px solid var(--line);border-radius:3px;padding:13px 14px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;gap:11px}
-.gpanel h3{margin:0}
+.gpanel h3{margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* 칸을 채우려 늘어나면 「부분까지」 옆에 빈 바가 남는다. 글자만큼만 차지하게. */
+.gpanel .switch{align-self:flex-start}
 .opt{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);cursor:pointer}
 .opt input[type="checkbox"],.opt input[type="radio"]{accent-color:var(--accent);width:14px;height:14px;margin:0;flex:none}
 .opt .v{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--faint)}
 .slider{width:100%;accent-color:var(--accent)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 10px;padding-top:10px;border-top:1px solid var(--line)}
 .legend span{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+/* 판을 넓게 쓰고 싶을 때 설정을 접는다. 접으면 같은 자리에 작은 손잡이만 남는다. */
+.gpanel[hidden]{display:none}
+.gclose{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:2px;color:var(--faint)}
+.gclose:hover{background:var(--sunk);color:var(--ink)}
+.gclose svg{width:12px;height:12px}
+.gshow{position:absolute;top:16px;left:16px;z-index:6;width:32px;height:32px;
+  display:grid;place-items:center;border-radius:3px;background:var(--card);
+  border:1px solid var(--line);color:var(--ink-2);box-shadow:var(--shadow)}
+.gshow:hover{border-color:var(--accent-line);color:var(--ink)}
+.gshow svg{width:15px;height:15px}
 .gtip{position:absolute;pointer-events:none;z-index:10;padding:6px 9px;border-radius:3px;
   background:var(--card);border:1px solid var(--line-2);box-shadow:var(--shadow);
   font-size:12px;max-width:230px;line-height:1.5}
@@ -914,8 +928,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
           <h1 id="viewTitle">모든 구석</h1>
           <p class="sub" id="viewSub">아직 기록이 없어요</p>
         </div>
-        <button class="btn ghost" id="btnNewSpace" title="사진을 묶어 둘 공간을 먼저 만든다">+ 새 공간</button>
-        <button class="btn ghost" id="btnGroup" hidden>공간으로 묶기</button>
+        <div class="headgrp">
+          <button class="btn ghost" id="btnNewSpace" title="사진을 묶어 둘 공간을 먼저 만든다">+ 새 공간</button>
+          <button class="btn ghost" id="btnGroup" hidden>공간으로 묶기</button>
+        </div>
         <button class="btn" id="btnPin" hidden>구성물 담기</button>
         <div class="switch sm" id="modeSw" role="tablist" aria-label="보기 방식">
           <button role="tab" data-mode="photo" aria-selected="true">사진으로</button>
@@ -931,8 +947,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
     <div class="gwrap" id="graph" hidden>
       <canvas id="cv"></canvas>
-      <div class="gpanel">
-        <h3><span class="lbl">취향 그래프</span></h3>
+      <button class="gshow" id="gPanelShow" hidden title="보기 설정 열기" aria-label="보기 설정 열기">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="6" cy="4.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="10.5" cy="11.5" r="1.6" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <div class="gpanel" id="gpanel">
+        <h3><span class="lbl">취향 그래프</span>
+          <button class="gclose" id="gPanelHide" title="설정 숨기기" aria-label="설정 숨기기">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8h8"/></svg>
+          </button></h3>
         <div class="switch sm" id="gMode" role="tablist" aria-label="그래프 단위">
           <button role="tab" data-gmode="photo" aria-selected="true">사진으로</button>
           <button role="tab" data-gmode="region" aria-selected="false">부분까지</button>
@@ -4189,6 +4211,35 @@ function sharedTags(a,b){
   let n=0; A.forEach(id=>{ if(B.has(id)) n++; });
   return n;
 }
+/* ── 노드 크기는 '담긴 내용의 양'을 따른다 ──────────────
+   부분이 여럿이고 태그가 많고 메모가 긴 것일수록 크다. 눈이 먼저 가는 것이
+   실제로 많이 들여다본 것과 같아야 그래프를 훑는 일이 쓸모가 있다.
+
+   기준은 같은 종류끼리의 평균이다 — 평균만큼 담긴 것이 여태 쓰던 크기(AVG)가
+   되고, 적게 담긴 것은 그보다 작아지고 많이 담긴 것은 커진다. 그래서 사진이
+   늘어도 그래프 전체의 밀도는 그대로다.
+
+   제곱근을 거치는 이유: 열 배 담긴 것이 열 배 커지면 화면을 다 잡아먹는다.
+   차이는 남기되 격차는 눌러 둔다. 위아래로 각각 절반·두 배쯤에서 멈춘다. */
+const NAVG={item:19,itemReg:14,region:15,tag:9,space:16};
+const NMIN={item:8,itemReg:6.5,region:7,tag:4.5,space:9};
+function meanOf(list){ return list.length? list.reduce((a,b)=>a+b,0)/list.length : 1; }
+function relSize(w,mean,avg,minPx){
+  const f=clamp(Math.sqrt(Math.max(0,w)/Math.max(1e-4,mean)),0.5,1.95);
+  return Math.max(minPx,avg*f);
+}
+/* 사진 한 장에 담긴 양 — 부분·태그·메모·이어둔 것. 1 은 '사진이 있다'는 몫. */
+function itemWeight(it){
+  const rc=(it.regions||[]).length;
+  const tc=itemTagIds(it).length;
+  const txt=(it.note||"").length+(it.title||"").length;
+  const lk=(it.links||[]).length;
+  return 1 + rc*2.4 + tc*1.2 + Math.min(9,txt/22) + lk*0.9;
+}
+function regionWeight(r){
+  return 1 + (r.tags||[]).length*1.4 + Math.min(8,(r.text||"").length/16);
+}
+
 function buildGraph(){
   const prev=new Map(G.nodes.map(n=>[n.id,n]));
   const nodes=[], edges=[];
@@ -4197,26 +4248,30 @@ function buildGraph(){
   const at=(id,d)=>{ const p=prev.get(id); return {x:p?p.x:(Math.random()-.5)*d, y:p?p.y:(Math.random()-.5)*d}; };
 
   /* 사진 노드 — 부분 모드에서도 남는다. 부분이 여기서 갈라져 나온다. */
-  items.forEach(it=>{
-    const rc=(it.regions||[]).length;
+  const IW=items.map(itemWeight), IM=meanOf(IW);
+  /* 부분 모드에서는 조각들에게 자리를 내주려 사진이 한 뼘 작아진다 */
+  const iAvg=REG?NAVG.itemReg:NAVG.item, iMin=REG?NMIN.itemReg:NMIN.item;
+  items.forEach((it,i)=>{
     const pos=at(it.id,420);
     nodes.push({id:it.id,type:"item",ref:it,
-      r: REG ? 13+Math.min(7,rc*1.4) : 17+Math.min(11,rc*2.2),
+      r:relSize(IW[i],IM,iAvg,iMin),
       x:pos.x,y:pos.y,vx:0,vy:0,label:it.title||"제목 없음"});
   });
 
   /* 좋아하는 부분 노드 */
   if(REG){
-    items.forEach(it=>{
-      (it.regions||[]).forEach((r,i)=>{
-        const id="r:"+it.id+":"+r.id;
-        const pos=at(id,420);
-        nodes.push({id:id,type:"region",ref:{it:it,r:r,i:i},r:15,
-          x:pos.x,y:pos.y,vx:0,vy:0,
-          label:(r.text||"").slice(0,24)||(it.title||"제목 없음")});
-        /* 사진 → 부분 : 짧게 붙여 한 덩어리로 보이게 */
-        edges.push({a:it.id,b:id,kind:"branch",w:1.2,len:44});
-      });
+    const RS=[];
+    items.forEach(it=>(it.regions||[]).forEach((r,i)=>RS.push({it:it,r:r,i:i})));
+    const RW=RS.map(o=>regionWeight(o.r)), RM=meanOf(RW);
+    RS.forEach((o,k)=>{
+      const id="r:"+o.it.id+":"+o.r.id;
+      const pos=at(id,420);
+      nodes.push({id:id,type:"region",ref:o,
+        r:relSize(RW[k],RM,NAVG.region,NMIN.region),
+        x:pos.x,y:pos.y,vx:0,vy:0,
+        label:(o.r.text||"").slice(0,24)||(o.it.title||"제목 없음")});
+      /* 사진 → 부분 : 짧게 붙여 한 덩어리로 보이게 */
+      edges.push({a:o.it.id,b:id,kind:"branch",w:1.2,len:44});
     });
   }
 
@@ -4231,12 +4286,15 @@ function buildGraph(){
       if(!byS.has(it.space)) byS.set(it.space,[]);
       byS.get(it.space).push(it);
     });
+    const SW=new Map();
+    byS.forEach((list,sid)=>SW.set(sid,list.reduce((n,it)=>n+itemWeight(it)*0.4,0)));
+    const SM=meanOf(Array.from(SW.values()));
     byS.forEach((list,sid)=>{
       const sp=spaceById(sid); if(!sp) return;
       const id="s:"+sid;
       const pos=at(id,420);
       nodes.push({id:id,type:"space",ref:sp,
-        r:11+Math.min(9,list.length*1.7),
+        r:relSize(SW.get(sid),SM,NAVG.space,NMIN.space),
         x:pos.x,y:pos.y,vx:0,vy:0,label:sp.name});
       list.forEach(it=>edges.push({a:id,b:it.id,kind:"space",w:2.6,len:52+list.length*3}));
     });
@@ -4249,10 +4307,12 @@ function buildGraph(){
     tagUse.get(tid).push(unit);
   };
   if(OPT.tags){
-    ST.tags.forEach(t=>{
-      const n=tagCount(t.id); if(!n) return;
+    const shown=ST.tags.filter(t=>tagCount(t.id)>0);
+    const TW=shown.map(t=>tagCount(t.id)), TM=meanOf(TW);
+    shown.forEach((t,i)=>{
       const pos=at("t:"+t.id,420);
-      nodes.push({id:"t:"+t.id,type:"tag",ref:t,r:5+Math.min(9,n*1.5),
+      nodes.push({id:"t:"+t.id,type:"tag",ref:t,
+        r:relSize(TW[i],TM,NAVG.tag,NMIN.tag),
         x:pos.x,y:pos.y,vx:0,vy:0,label:t.name,color:catColor(t.cat)});
     });
     const known=new Set(ST.tags.map(t=>t.id));
@@ -4634,6 +4694,11 @@ function wireGraph(){
     $("#gThrV").textContent=OPT.thr+"개 이상";
     graphDirty();
   });
+  const panel=$("#gpanel"), showB=$("#gPanelShow");
+  const setPanel=on=>{ panel.hidden=!on; showB.hidden=on; };
+  $("#gPanelHide").addEventListener("click",()=>setPanel(false));
+  showB.addEventListener("click",()=>setPanel(true));
+
   $("#legend").innerHTML=CATS.filter(c=>c.id!=="etc").map(c=>
     '<span><i class="dot" style="background:var('+c.v+')"></i>'+esc(c.name)+'</span>').join("")+
     '<span><i class="dot" style="background:none;border:2px solid var(--accent)"></i>공간</span>';
