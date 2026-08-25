@@ -14,7 +14,7 @@
  * 아래 fetch 전략을 전부 "일단 캐시로 즉시 띄우고 뒤에서 새로 받아 교체"로
  * 짜두었다. 버전 갱신은 청소용이지 신선도용이 아니다.
  */
-const VERSION = "7aac21e972b3"; /* BUILD */
+const VERSION = "daf9efc9ba04"; /* BUILD */
 
 const SHELL = `gusuk-shell-${VERSION}`;
 const FONTS = `gusuk-fonts-v1`; // 폰트는 URL 자체가 불변이라 버전을 따라갈 필요가 없다

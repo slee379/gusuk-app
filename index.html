@@ -217,6 +217,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .head h1{font-family:var(--f-display);font-weight:400;font-size:30px;line-height:1.15;margin:0;text-wrap:balance}
 /* 공간에서 빠져나오는 길 — 제목 바로 위, 눈이 먼저 닿는 자리에 둔다 */
 .back-all{margin-bottom:9px}
+/* 손대는 것들은 오른쪽에 한데 모은다. 제목과 버튼 사이만 벌어지고,
+   버튼끼리는 붙어 있어야 눈이 한 번에 훑는다. */
+.headact{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;
+  gap:10px;flex-wrap:wrap}
 /* 공간에 관한 두 버튼은 한 덩어리로 — 하는 일이 이어져 있으니 사이를 좁힌다 */
 .headgrp{display:flex;align-items:center;gap:6px}
 .head .sub{margin:5px 0 0;color:var(--muted);font-size:13px}
@@ -703,6 +707,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .pick[aria-pressed="true"]::after{content:"✓";position:absolute;top:5px;right:5px;width:18px;height:18px;
   border-radius:2px;background:var(--accent);color:var(--accent-on);display:grid;place-items:center;font-size:11px}
 .pick .crop{width:100%;display:block;background-color:var(--sunk)}
+/* 배경을 지운 그림 — 바탕을 비우고 통째로 띄운다 */
+.crop.cut,.pick .crop.cut{background-color:transparent}
+.bpin.cut{background:none;box-shadow:none}
+.bpin.cut .img{background-color:transparent}
+.bpin.cut.on{outline-offset:4px}
 .pick.rg .cap{color:var(--muted)}
 .pick.done{opacity:.5;cursor:default}
 .pick.done::after{background:var(--line-2);color:var(--ink-2)}
@@ -939,14 +948,16 @@ button{background:none;border:0;padding:0;cursor:pointer}
           <h1 id="viewTitle">모든 구석</h1>
           <p class="sub" id="viewSub">아직 기록이 없어요</p>
         </div>
-        <div class="headgrp">
-          <button class="btn ghost" id="btnNewSpace" title="사진을 묶어 둘 공간을 먼저 만든다">+ 새 공간</button>
-          <button class="btn ghost" id="btnGroup" hidden>공간으로 묶기</button>
-        </div>
-        <button class="btn" id="btnPin" hidden>구성물 담기</button>
-        <div class="switch sm" id="modeSw" role="tablist" aria-label="보기 방식">
-          <button role="tab" data-mode="photo" aria-selected="true">사진으로</button>
-          <button role="tab" data-mode="region" aria-selected="false">좋아하는 부분만</button>
+        <div class="headact">
+          <div class="headgrp">
+            <button class="btn ghost" id="btnNewSpace" title="사진을 묶어 둘 공간을 먼저 만든다">+ 새 공간</button>
+            <button class="btn ghost" id="btnGroup" hidden>공간으로 묶기</button>
+          </div>
+          <button class="btn" id="btnPin" hidden>구성물 담기</button>
+          <div class="switch sm" id="modeSw" role="tablist" aria-label="보기 방식">
+            <button role="tab" data-mode="photo" aria-selected="true">사진으로</button>
+            <button role="tab" data-mode="region" aria-selected="false">좋아하는 부분만</button>
+          </div>
         </div>
       </div>
       <div class="chips" id="activeChips"></div>
@@ -1196,12 +1207,15 @@ function regionFace(it,r){
   const u=k?urlFor(k):"";
   if(u){
     const w=(r.shot.w||3), h=(r.shot.h||2);
-    return {shot:true,
-      style:'background-image:url('+u+');background-size:cover;background-position:center;'+
+    const cut=!!r.shot.cut;
+    return {shot:true, cut:cut,
+      style:'background-image:url('+u+');background-repeat:no-repeat;background-position:center;'+
+            'background-size:'+(cut?"contain":"cover")+';'+
+            (cut?'background-color:transparent;':'')+
             'aspect-ratio:'+(w/Math.max(1,h)).toFixed(4),
       clip:""};
   }
-  return {shot:false, style:cropStyle(it,r),
+  return {shot:false, cut:false, style:cropStyle(it,r),
     clip:(r.path&&r.path.length>2)?';clip-path:'+pathToClip(r.path):""};
 }
 /* 부분의 가로:세로 — 붙인 사진이 있으면 그 비율을 따른다 */
@@ -1221,18 +1235,23 @@ async function vaultWriteShot(it,r,blob,ext){
   }catch(e){ vaultTrouble(e); }
   finally{ Vault.busy--; }
 }
+/* cut = 배경을 지운 그림인지. 지운 그림은 네모 배경 없이 띄워 그린다. */
+async function putShot(it,r,blob,ext,w,h,cut){
+  const key=shotKey(it,r);
+  const old=URLS.get(key); if(old) URL.revokeObjectURL(old);
+  r.shot={key:key,file:null,w:w,h:h,cut:!!cut};
+  if(Vault.ok) await vaultWriteShot(it,r,blob,ext);
+  else await imgPut(key,blob);
+  URLS.set(key,URL.createObjectURL(blob));
+  IMGS.delete(key);
+  return true;
+}
 async function attachShot(it,r,file){
   if(!/^image\//.test(file.type)){ toast("이미지 파일만 넣을 수 있어요.",true); return false; }
   try{
-    const {blob,w,h,ext}=await processFile(file);
-    const key=shotKey(it,r);
-    const old=URLS.get(key); if(old) URL.revokeObjectURL(old);
-    r.shot={key:key,file:null,w:w,h:h};
-    if(Vault.ok) await vaultWriteShot(it,r,blob,ext);
-    else await imgPut(key,blob);
-    URLS.set(key,URL.createObjectURL(blob));
-    IMGS.delete(key);
-    return true;
+    /* 넣는 그림이 이미 배경 없는 PNG 일 수 있으니 알파를 지키며 줄인다 */
+    const {blob,w,h,ext,alpha}=await processFile(file,true);
+    return await putShot(it,r,blob,ext,w,h,alpha);
   }catch(e){ console.warn(e); toast("사진을 넣지 못했어요.",true); return false; }
 }
 /* 붙인 사진을 뗀다. 원본에서 잘라낸 자리로 돌아간다. */
@@ -1731,7 +1750,7 @@ function loadImage(src){
     im.src=src;
   });
 }
-async function processFile(file){
+async function processFile(file,keepAlpha){
   const raw=URL.createObjectURL(file);
   let im;
   try{ im=await loadImage(raw); }
@@ -1739,11 +1758,23 @@ async function processFile(file){
   const scale=Math.min(1,MAX_EDGE/Math.max(im.naturalWidth,im.naturalHeight));
   const w=Math.max(1,Math.round(im.naturalWidth*scale)), h=Math.max(1,Math.round(im.naturalHeight*scale));
   const c=document.createElement("canvas"); c.width=w; c.height=h;
-  const g=c.getContext("2d"); g.imageSmoothingQuality="high"; g.drawImage(im,0,0,w,h);
+  const g=c.getContext("2d",{willReadFrequently:!!keepAlpha});
+  g.imageSmoothingQuality="high"; g.drawImage(im,0,0,w,h);
   URL.revokeObjectURL(raw);
-  const type=webpOK()?"image/webp":"image/jpeg";
-  const blob=await new Promise(res=>c.toBlob(res,type,0.85));
-  return {blob:blob||file,w:w,h:h,ext:(webpOK()?"webp":"jpg")};
+  /* 배경이 뚫린 그림이면 jpeg 로 굽는 순간 검게 메워진다. 알파가 있는지 보고 형식을 고른다. */
+  let alpha=false;
+  if(keepAlpha){
+    try{
+      const d=g.getImageData(0,0,w,h).data;
+      for(let i=3;i<d.length;i+=4) if(d[i]<250){ alpha=true; break; }
+    }catch(e){}
+  }
+  const webp=webpOK();
+  const type=alpha?(webp?"image/webp":"image/png"):(webp?"image/webp":"image/jpeg");
+  const ext=alpha?(webp?"webp":"png"):(webp?"webp":"jpg");
+  const q=(type==="image/png")?undefined:0.85;
+  const blob=await new Promise(res=>c.toBlob(res,type,q));
+  return {blob:blob||file,w:w,h:h,ext:ext,alpha:alpha};
 }
 async function addFiles(files){
   const list=Array.prototype.slice.call(files).filter(f=>/^image\//.test(f.type));
@@ -2113,12 +2144,13 @@ function boardTagSummary(pins){
 function pinHTML(p,i){
   const w=pinW(p), h=pinH(p);
   const face=p.r?regionFace(p.it,p.r):null;
+  const cut=!!(face&&face.cut);
   const style=face? face.style
     : 'background-image:url('+urlFor(p.it.img&&p.it.img.key)+');background-size:cover;background-position:center';
   const clip=face?face.clip:'';
   const cap=(p.r?(p.r.text||""):(p.it.title||""))||"";
   const on=(BSEL===pinKey(p.it.id,p.r&&p.r.id))?" on":"";
-  return '<figure class="bpin'+on+'" data-pin="'+i+'" style="left:'+p.pin.x+'px;top:'+p.pin.y+
+  return '<figure class="bpin'+on+(cut?" cut":"")+'" data-pin="'+i+'" style="left:'+p.pin.x+'px;top:'+p.pin.y+
       'px;width:'+w+'px;height:'+h+'px">'+
     '<div class="img" style="'+style+clip+'"></div>'+
     (cap?'<figcaption class="cap">'+esc(cap)+'</figcaption>':"")+
@@ -2295,20 +2327,24 @@ async function exportBoard(b,pins){
     const im=imgEl(shot?shot.key:(p.it.img&&p.it.img.key));
     const dx=(p.pin.x-x0+PAD)*sc, dy=(p.pin.y-y0+PAD)*sc;
     const dw=pinW(p)*sc, dh=pinH(p)*sc;
+    const cut=!!(shot&&shot.cut);
     g.save();
     g.beginPath(); g.rect(dx,dy,dw,dh); g.clip();
-    g.fillStyle="#E3E3DE"; g.fillRect(dx,dy,dw,dh);
+    if(!cut){ g.fillStyle="#E3E3DE"; g.fillRect(dx,dy,dw,dh); }
     if(im&&im.complete&&im.naturalWidth){
       const iw=im.naturalWidth, ih=im.naturalHeight;
       const crop=p.r&&!shot;
       const sx=crop?p.r.x*iw:0, sy=crop?p.r.y*ih:0;
       const sw=crop?Math.max(1,p.r.w*iw):iw, sh=crop?Math.max(1,p.r.h*ih):ih;
-      const k=Math.max(dw/sw,dh/sh);
+      /* 지운 그림은 잘리지 않게 안쪽에 맞춘다 */
+      const k=cut?Math.min(dw/sw,dh/sh):Math.max(dw/sw,dh/sh);
       g.drawImage(im,sx,sy,sw,sh, dx+dw/2-sw*k/2, dy+dh/2-sh*k/2, sw*k, sh*k);
     }
     g.restore();
-    g.strokeStyle="rgba(27,28,26,.18)"; g.lineWidth=1;
-    g.strokeRect(dx+.5,dy+.5,dw-1,dh-1);
+    if(!cut){
+      g.strokeStyle="rgba(27,28,26,.18)"; g.lineWidth=1;
+      g.strokeRect(dx+.5,dy+.5,dw-1,dh-1);
+    }
   }
 
   g.fillStyle="#1B1C1A";
@@ -2579,7 +2615,7 @@ function regionCardHTML(o){
   return '<article class="card'+(PICKMODE&&PICK.has(key)?" picked":"")+'" data-open="'+o.it.id+'" data-rgsel="'+o.r.id+'" tabindex="0">'+
     '<div class="pins">'+(o.i+1)+'</div>'+
     (PICKMODE?'<span class="tick">'+ICON_CHECK+'</span>':pinBtnHTML(o.it.id,o.r.id))+
-    (f=>'<div class="crop'+(f.shot?" shot":"")+'" style="'+f.style+f.clip+'"></div>')(regionFace(o.it,o.r))+
+    (f=>'<div class="crop'+(f.shot?" shot":"")+(f.cut?" cut":"")+'" style="'+f.style+f.clip+'"></div>')(regionFace(o.it,o.r))+
     '<div class="meta">'+memo+(tg?'<div class="row">'+tg+'</div>':"")+
     '<div class="from">'+esc(o.it.title||"제목 없음")+'</div></div></article>';
 }
@@ -2834,7 +2870,7 @@ function noteFromItem(it){
     regions:(it.regions||[]).map(r=>{
       const o={id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:tagNames(r.tags)};
       if(r.path&&r.path.length>2) o.path=r.path;   /* 자동 선택한 면의 윤곽 */
-      if(r.shot) o.shot={file:r.shot.file||null,w:r.shot.w,h:r.shot.h};  /* 따로 붙인 사진 */
+      if(r.shot) o.shot={file:r.shot.file||null,w:r.shot.w,h:r.shot.h,cut:!!r.shot.cut};
       return o;
     }),
     links:it.links||[],
@@ -2849,7 +2885,7 @@ function itemFromNote(d){
     regions:(d.regions||[]).map(r=>({id:r.id,x:+r.x,y:+r.y,w:+r.w,h:+r.h,text:r.text||"",
       path:Array.isArray(r.path)?r.path:null,tags:tagIds(r.tags),
       shot:r.shot?{key:d.id+"__"+r.id,file:r.shot.file||null,
-        w:+r.shot.w||3,h:+r.shot.h||2}:null})),
+        w:+r.shot.w||3,h:+r.shot.h||2,cut:!!r.shot.cut}:null})),
     links:Array.isArray(d.links)?d.links:[],
     img:{key:d.id,file:(d.image&&d.image.file)||null,w:(d.image&&d.image.w)||3,h:(d.image&&d.image.h)||2},
     createdAt:d.createdAt||Date.now(),updatedAt:d.updatedAt||0};
@@ -3377,33 +3413,92 @@ function wandPixels(im){
   return wandPx;
 }
 
-/* 클릭한 색에서 시작해 비슷한 이웃으로 번진다 */
+/* ── 테두리 지도 ────────────────────────────────────────
+   색만 보고 번지면 물체를 넘어 배경까지 새어 나간다. 사람이 물체를
+   알아보는 첫 단서는 색이 아니라 '경계'라서, 밝기가 급히 꺾이는 자리를
+   미리 찾아 두고 번짐이 그 선을 넘지 못하게 막는다.
+
+   소벨(Sobel) — 가로·세로 기울기를 재서 그 크기를 테두리 세기로 삼는다.
+   모델이 아니라 산수라서 즉시 돌고 내려받을 것도 없다. */
+function wandEdges(px){
+  if(px.edge) return px.edge;
+  const w=px.w,h=px.h,d=px.data;
+  const gray=new Float32Array(w*h);
+  for(let i=0,p=0;p<w*h;p++,i+=4)
+    gray[p]=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114);
+  const e=new Uint8Array(w*h);
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const p=y*w+x;
+      const tl=gray[p-w-1],t=gray[p-w],tr=gray[p-w+1];
+      const l=gray[p-1],r=gray[p+1];
+      const bl=gray[p+w-1],b=gray[p+w],br=gray[p+w+1];
+      const gx=(tr+2*r+br)-(tl+2*l+bl);
+      const gy=(bl+2*b+br)-(tl+2*t+tr);
+      e[p]=Math.min(255,Math.round(Math.hypot(gx,gy)/4));
+    }
+  }
+  px.edge=e;
+  return e;
+}
+
+/* 클릭한 색에서 시작해 비슷한 이웃으로 번지되, 테두리에서 멈춘다.
+
+   두 갈래로 받아들인다 —
+     · 처음 누른 색과 가까우면 (tol)
+     · 또는 바로 옆 칸과 가까우면 (tol 의 절반) — 그늘이 서서히 지는 면을
+       따라가기 위해서다. 대신 이 갈래는 테두리에 더 민감하게 군다.
+   어느 쪽이든 테두리 세기가 문턱을 넘으면 들어가지 않는다. */
 function floodMask(px,sx,sy,tol){
   const w=px.w,h=px.h,d=px.data;
+  const edge=wandEdges(px);
   const seed=(sy*w+sx)*4;
   const r0=d[seed],g0=d[seed+1],b0=d[seed+2];
   const mask=new Uint8Array(w*h);
   const stack=new Int32Array(w*h);
   let top=0;
   const t2=tol*tol;
+  const t2near=t2*0.34;
+  /* 문턱은 허용 오차를 따라 조금 움직인다 — 넓게 잡을수록 테두리에도 너그럽게 */
+  const eStop=Math.round(30+tol*0.42);
+  const eSoft=Math.round(eStop*0.6);
   stack[top++]=sy*w+sx; mask[sy*w+sx]=1;
   while(top>0){
     const p=stack[--top];
     const x=p%w, y=(p-x)/w;
+    const ci=p*4;
     /* 상하좌우 4방향 */
-    if(x>0) push(p-1);
-    if(x<w-1) push(p+1);
-    if(y>0) push(p-w);
-    if(y<h-1) push(p+w);
-    function push(np){
+    if(x>0) push(p-1,ci);
+    if(x<w-1) push(p+1,ci);
+    if(y>0) push(p-w,ci);
+    if(y<h-1) push(p+w,ci);
+    function push(np,ci){
       if(mask[np]) return;
+      const eg=edge[np];
+      if(eg>=eStop) return;                    /* 테두리는 넘지 않는다 */
       const i=np*4;
       const dr=d[i]-r0, dg=d[i+1]-g0, db=d[i+2]-b0;
-      if(dr*dr+dg*dg+db*db>t2) return;
-      mask[np]=1; stack[top++]=np;
+      if(dr*dr+dg*dg+db*db<=t2){ mask[np]=1; stack[top++]=np; return; }
+      if(eg>=eSoft) return;                    /* 이어 붙는 갈래는 더 조심스럽게 */
+      const nr=d[i]-d[ci], ng=d[i+1]-d[ci+1], nb=d[i+2]-d[ci+2];
+      if(nr*nr+ng*ng+nb*nb<=t2near){ mask[np]=1; stack[top++]=np; }
     }
   }
   return mask;
+}
+
+/* 테두리 앞에서 한 칸 멈춰 섰으므로, 한 칸 부풀려 윤곽선을 품는다 */
+function dilate(mask,w,h){
+  const out=mask.slice();
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const p=y*w+x;
+    if(!mask[p]) continue;
+    if(x>0) out[p-1]=1;
+    if(x<w-1) out[p+1]=1;
+    if(y>0) out[p-w]=1;
+    if(y<h-1) out[p+w]=1;
+  }
+  return out;
 }
 
 /* 티끌 구멍 메우기 — 사방이 채워진 빈 칸은 채운다 */
@@ -3504,6 +3599,7 @@ function wandSelect(im,fx,fy,tol){
   let mask=floodMask(px,sx,sy,tol);
   mask=fillPinholes(mask,px.w,px.h);
   mask=keepBlob(mask,px.w,px.h,sx,sy);
+  mask=dilate(mask,px.w,px.h);
 
   let n=0; for(let i=0;i<mask.length;i++) n+=mask[i];
   if(n<12) return null;                       /* 너무 작다 */
@@ -3527,9 +3623,64 @@ function wandSelect(im,fx,fy,tol){
     path:pts.map(([x,y])=>[
       +(((x-x0)/bw)*100).toFixed(2),
       +(((y-y0)/bh)*100).toFixed(2)]),
-    share:share
+    share:share,
+    /* 배경을 지운 그림을 만들 때 쓴다 */
+    mask:mask, mw:px.w, mh:px.h
   };
 }
+/* ── 배경을 지운 그림 만들기 ────────────────────────────
+   골라낸 마스크를 알파 채널로 구워 넣는다. 잘라낸 상자만큼만 남기므로
+   결과는 PNG 처럼 물체만 떠 있는 그림이 된다 — 무드보드에 올렸을 때
+   네모난 배경이 따라붙지 않게 하려는 것.
+
+   가장자리는 마스크를 이중선형으로 읽어 부드럽게 깎는다. 계단처럼
+   각지면 오려 붙인 티가 나서다. */
+const CUT_MAX = 900;         /* 잘라낸 그림의 긴 변 최대 */
+function cutoutCanvas(im,sel){
+  const nw=im.naturalWidth, nh=im.naturalHeight;
+  if(!nw||!nh) return null;
+  const bx=sel.x*nw, by=sel.y*nh;
+  const bw=Math.max(1,sel.w*nw), bh=Math.max(1,sel.h*nh);
+  const sc=Math.min(1,CUT_MAX/Math.max(bw,bh));
+  const W=Math.max(1,Math.round(bw*sc)), H=Math.max(1,Math.round(bh*sc));
+  const c=document.createElement("canvas"); c.width=W; c.height=H;
+  const g=c.getContext("2d",{willReadFrequently:true});
+  let img;
+  try{
+    g.drawImage(im,bx,by,bw,bh,0,0,W,H);
+    img=g.getImageData(0,0,W,H);
+  }catch(e){ return null; }
+
+  const m=sel.mask, mw=sel.mw, mh=sel.mh;
+  const kx=mw/nw, ky=mh/nh;                  /* 사진 좌표 → 마스크 좌표 */
+  const at=(x,y)=>{
+    if(x<0||y<0||x>=mw||y>=mh) return 0;
+    return m[y*mw+x];
+  };
+  const d=img.data;
+  for(let Y=0;Y<H;Y++){
+    const sy=(by+(Y+0.5)/H*bh)*ky-0.5;
+    const y0=Math.floor(sy), fy=sy-y0;
+    for(let X=0;X<W;X++){
+      const sx=(bx+(X+0.5)/W*bw)*kx-0.5;
+      const x0=Math.floor(sx), fx=sx-x0;
+      const v=at(x0,y0)*(1-fx)*(1-fy)+at(x0+1,y0)*fx*(1-fy)+
+              at(x0,y0+1)*(1-fx)*fy+at(x0+1,y0+1)*fx*fy;
+      /* 0.35~0.75 사이만 반투명으로 남기고 나머지는 딱 떨어지게 */
+      const a=v<=0.35?0:(v>=0.75?1:(v-0.35)/0.4);
+      d[(Y*W+X)*4+3]=Math.round(a*255);
+    }
+  }
+  g.putImageData(img,0,0);
+  return c;
+}
+/* 알파가 살아남는 형식으로. webp 가 되면 webp, 아니면 png. */
+function cutoutBlob(c){
+  const webp=webpOK();
+  return new Promise(res=>c.toBlob(res, webp?"image/webp":"image/png", webp?0.92:undefined))
+    .then(b=>({blob:b,ext:webp?"webp":"png"}));
+}
+
 function pathToClip(path){
   return "polygon("+path.map(p=>p[0]+"% "+p[1]+"%").join(",")+")";
 }
@@ -4206,16 +4357,26 @@ function wireSheet(){
     const prev=layer.querySelector(".rg.preview"); if(prev) prev.remove();
     const bar=sheetEl&&sheetEl.querySelector("#wandbar"); if(bar) bar.hidden=true;
   };
-  commitWand=()=>{
+  commitWand=async ()=>{
     if(!WANDSEL||!CUR) return;
-    const r=WANDSEL;
+    const r=WANDSEL, it=CUR;
+    const im=sheetEl.querySelector("#shImg");
     const rg={id:uid("r"),
       x:+r.x.toFixed(4),y:+r.y.toFixed(4),w:+r.w.toFixed(4),h:+r.h.toFixed(4),
-      path:r.path, text:"", tags:[]};
-    CUR.regions=(CUR.regions||[]).concat([rg]);
+      path:r.path, text:"", tags:[], shot:null};
+    it.regions=(it.regions||[]).concat([rg]);
     SEL=rg.id; DRAW=false;
     clearWand();
-    save(CUR); renderRegions(); updateDrawUI(); graphDirty();
+    save(it); renderRegions(); updateDrawUI();
+    /* 배경을 지운 그림을 만들어 이 부분의 얼굴로 삼는다 */
+    try{
+      const c=cutoutCanvas(im,r);
+      if(c){
+        const {blob,ext}=await cutoutBlob(c);
+        if(blob) await putShot(it,rg,blob,ext,c.width,c.height,true);
+      }
+    }catch(e){ console.warn("배경 지우기 실패",e); }
+    save(it); renderRegions(); renderArchive(); graphDirty();
     const ta=sheetEl.querySelector('[data-rgtext="'+rg.id+'"]');
     if(ta){ ta.scrollIntoView({block:"nearest"}); ta.focus(); }
   };
@@ -4386,6 +4547,13 @@ let cv=null,ctx=null,DPR=1;
 
 function graphDirty(){ needBuild=true; if(graphOn) buildGraph(); }
 
+/* 그래프에서 쓸 사진의 얼굴. 부분에 그림을 붙여 두었으면 그것을 쓴다 —
+   원본과 붙인 그림을 굳이 둘로 갈라 보여줄 이유가 없다. */
+function itemFace(it){
+  const r=(it.regions||[]).find(x=>x.shot&&x.shot.key&&urlFor(x.shot.key));
+  if(r) return {key:r.shot.key,cut:!!r.shot.cut};
+  return {key:(it.img&&it.img.key)||"",cut:false};
+}
 function imgEl(key){
   if(!key) return null;
   if(IMGS.has(key)) return IMGS.get(key);
@@ -4697,7 +4865,7 @@ function draw(){
         const iw=im.naturalWidth, ih=im.naturalHeight;
         const sx=shot?0:rg.x*iw, sy=shot?0:rg.y*ih;
         const sw=shot?iw:Math.max(1,rg.w*iw), sh=shot?ih:Math.max(1,rg.h*ih);
-        const sc=Math.max(s/sw,s/sh);
+        const sc=(shot&&shot.cut)?Math.min(s/sw,s/sh):Math.max(s/sw,s/sh);
         ctx.drawImage(im, sx, sy, sw, sh,
           nd.x-sw*sc/2, nd.y-sh*sc/2, sw*sc, sh*sc);
       }else{ ctx.fillStyle=line; ctx.fillRect(x,y,s,s); }
@@ -4709,24 +4877,28 @@ function draw(){
       ctx.globalAlpha=dim?0.2:1;
     }else if(nd.type==="item"){
       const s=nd.r*2, x=nd.x-nd.r, y=nd.y-nd.r;
+      const face=itemFace(nd.ref);
       ctx.save();
       roundRect(ctx,x,y,s,s,3); ctx.clip();
-      const im=imgEl(nd.ref.img&&nd.ref.img.key);
+      const im=imgEl(face.key);
       if(im&&im.complete&&im.naturalWidth){
         const iw=im.naturalWidth, ih=im.naturalHeight;
-        const sc=Math.max(s/iw,s/ih);
+        /* 배경을 지운 그림은 잘리지 않게 안쪽에 맞춘다 */
+        const sc=face.cut?Math.min(s/iw,s/ih):Math.max(s/iw,s/ih);
         ctx.drawImage(im,nd.x-iw*sc/2,nd.y-ih*sc/2,iw*sc,ih*sc);
       }else{ ctx.fillStyle=line; ctx.fillRect(x,y,s,s); }
       ctx.restore();
-      roundRect(ctx,x,y,s,s,3);
-      ctx.strokeStyle=(nd===focus)?accent:line;
-      ctx.lineWidth=(nd===focus?2:1)/view.k; ctx.stroke();
+      if(!face.cut||nd===focus){
+        roundRect(ctx,x,y,s,s,3);
+        ctx.strokeStyle=(nd===focus)?accent:line;
+        ctx.lineWidth=(nd===focus?2:1)/view.k; ctx.stroke();
+      }
     }else if(nd.type==="space"){
       /* 사진 노드와 헷갈리지 않게 동그랗게 자르고 테두리를 두껍게 */
       const cov=spaceCover(nd.ref);
       ctx.save();
       ctx.beginPath(); ctx.arc(nd.x,nd.y,nd.r,0,Math.PI*2); ctx.clip();
-      const im=cov?imgEl(cov.img&&cov.img.key):null;
+      const im=cov?imgEl(itemFace(cov).key):null;
       if(im&&im.complete&&im.naturalWidth){
         const iw=im.naturalWidth, ih=im.naturalHeight, s2=nd.r*2;
         const sc=Math.max(s2/iw,s2/ih);
@@ -5084,7 +5256,8 @@ async function importFiles(files){
         try{
           const sb=await (await fetch(src.shotImage)).blob();
           const key=shotKey(it,r);
-          r.shot={key:key,file:null,w:(src.shot&&src.shot.w)||3,h:(src.shot&&src.shot.h)||2};
+          r.shot={key:key,file:null,w:(src.shot&&src.shot.w)||3,h:(src.shot&&src.shot.h)||2,
+            cut:!!(src.shot&&src.shot.cut)};
           if(Vault.ok){
             const ext=(sb.type||"").indexOf("webp")>=0?"webp":"jpg";
             await vaultWriteShot(it,r,sb,ext);
