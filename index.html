@@ -376,6 +376,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .rgitem textarea{width:100%;border:0;background:none;resize:none;overflow:hidden;
   font-size:13px;line-height:1.6;padding:0;min-height:22px}
 .rgitem textarea::placeholder{color:var(--faint)}
+/* 부분에 붙인 사진 */
+.rgshot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px}
+.rgshot .th{width:34px;height:34px;flex:none;border-radius:2px;border:1px solid var(--line);
+  background-size:cover;background-position:center;background-color:var(--sunk)}
+.rgshot .btn{height:26px;padding:0 9px;font-size:12px}
 
 /* ── 빠른 담기 메뉴 (우클릭 / 길게 누르기) ─────────────── */
 .ctxmenu{
@@ -888,6 +893,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
 <!-- capture 속성이 붙으면 폰이 사진첩 대신 카메라를 바로 연다 -->
 <input type="file" id="camPick" accept="image/*" capture="environment" class="sr" tabindex="-1">
 <input type="file" id="importPick" accept="application/json,.json" multiple class="sr" tabindex="-1">
+<!-- 부분에 붙일 '깔끔한 사진' 하나 -->
+<input type="file" id="shotPick" accept="image/*" class="sr" tabindex="-1">
 
 <div class="shell">
   <div class="rail-scrim" id="railScrim"></div>
@@ -1156,14 +1163,89 @@ function urlFor(key){
   return "";
 }
 async function hydrateURLs(){
-  for(const it of ST.items){
-    const k=it.img&&it.img.key;
-    if(!k||URLS.has(k)) continue;
+  const keys=[];
+  ST.items.forEach(it=>{
+    if(it.img&&it.img.key) keys.push(it.img.key);
+    (it.regions||[]).forEach(r=>{ if(r.shot&&r.shot.key) keys.push(r.shot.key); });
+  });
+  for(const k of keys){
+    if(URLS.has(k)) continue;
     try{
       const blob=await imgGet(k);
       if(blob) URLS.set(k,URL.createObjectURL(blob));
     }catch(e){ console.warn("image load failed",k,e); }
   }
+}
+
+/* ══ 부분에 붙이는 사진 ═════════════════════════════════
+   사진에서 네모로 잘라낸 조각은 배경이 함께 딸려 온다. 자동 선택이
+   색을 따라가는 물건이라 물체의 윤곽을 정확히 따내지는 못한다.
+   그래서 "이건 이 물건이다" 라고 못 박고 싶을 때, 그 자리에 깔끔한 사진을
+   한 장 붙일 수 있게 했다 — 제품 컷이든, 따로 잘라 온 그림이든.
+
+   붙이면 그 사진이 부분의 얼굴이 된다 (카드·무드보드·그래프 모두).
+   안 붙이면 여태처럼 원본에서 잘라낸 자리를 쓴다.
+
+   저장 방식은 원본 사진과 같다. 볼트에서는 파일 이름을
+   images/<사진id>__<부분id>.<확장자> 로 둔다 (`:` 는 윈도우에서 못 쓴다). */
+const shotKey=(it,r)=>it.id+"__"+r.id;
+
+/* 부분의 겉모습. 붙여 둔 사진이 있으면 그게 주인공이다. */
+function regionFace(it,r){
+  const k=r.shot&&r.shot.key;
+  const u=k?urlFor(k):"";
+  if(u){
+    const w=(r.shot.w||3), h=(r.shot.h||2);
+    return {shot:true,
+      style:'background-image:url('+u+');background-size:cover;background-position:center;'+
+            'aspect-ratio:'+(w/Math.max(1,h)).toFixed(4),
+      clip:""};
+  }
+  return {shot:false, style:cropStyle(it,r),
+    clip:(r.path&&r.path.length>2)?';clip-path:'+pathToClip(r.path):""};
+}
+/* 부분의 가로:세로 — 붙인 사진이 있으면 그 비율을 따른다 */
+function regionRatio(it,r){
+  if(r.shot&&r.shot.w) return (r.shot.h||2)/(r.shot.w||3);
+  const iw=(it.img&&it.img.w)||3, ih=(it.img&&it.img.h)||2;
+  return (r.h*ih)/Math.max(1e-6,r.w*iw);
+}
+async function vaultWriteShot(it,r,blob,ext){
+  if(!Vault.ok) return;
+  Vault.busy++;
+  try{
+    const imgs=await subDir("images");
+    const name=shotKey(it,r)+"."+ext;
+    await writeBlob(imgs,name,blob);
+    r.shot.file=name;
+  }catch(e){ vaultTrouble(e); }
+  finally{ Vault.busy--; }
+}
+async function attachShot(it,r,file){
+  if(!/^image\//.test(file.type)){ toast("이미지 파일만 넣을 수 있어요.",true); return false; }
+  try{
+    const {blob,w,h,ext}=await processFile(file);
+    const key=shotKey(it,r);
+    const old=URLS.get(key); if(old) URL.revokeObjectURL(old);
+    r.shot={key:key,file:null,w:w,h:h};
+    if(Vault.ok) await vaultWriteShot(it,r,blob,ext);
+    else await imgPut(key,blob);
+    URLS.set(key,URL.createObjectURL(blob));
+    IMGS.delete(key);
+    return true;
+  }catch(e){ console.warn(e); toast("사진을 넣지 못했어요.",true); return false; }
+}
+/* 붙인 사진을 뗀다. 원본에서 잘라낸 자리로 돌아간다. */
+async function detachShot(it,r){
+  const sh=r.shot; if(!sh) return;
+  r.shot=null;
+  const u=URLS.get(sh.key); if(u) URL.revokeObjectURL(u);
+  URLS.delete(sh.key); IMGS.delete(sh.key);
+  if(Vault.ok){
+    if(sh.file){
+      try{ const imgs=await subDir("images"); await imgs.removeEntry(sh.file); }catch(e){}
+    }
+  }else{ try{ await imgDel(sh.key); }catch(e){} }
 }
 
 /* ══ 무드보드 ══════════════════════════════════════════
@@ -1706,10 +1788,19 @@ async function deleteItem(id){
   ST.items.splice(i,1);
   ST.items.forEach(o=>{ o.links=(o.links||[]).filter(l=>l!==id); });
   const key=it.img&&it.img.key;
-  if(key){ const u=URLS.get(key); if(u) URL.revokeObjectURL(u); URLS.delete(key); IMGS.delete(key); }
+  const shots=(it.regions||[]).map(r=>r.shot&&r.shot.key).filter(Boolean);
+  [key].concat(shots).forEach(k=>{
+    if(!k) return;
+    const u=URLS.get(k); if(u) URL.revokeObjectURL(u);
+    URLS.delete(k); IMGS.delete(k);
+  });
   pruneTags(); pruneSpaces(); pruneBoards();
   if(Vault.ok){ await vaultDeleteItem(it); await vaultWriteTags(); await vaultWriteSpaces(); await vaultWriteBoards(); }
-  else { if(key){ try{await imgDel(key);}catch(e){} } save(); }
+  else {
+    if(key){ try{await imgDel(key);}catch(e){} }
+    for(const k of shots){ try{await imgDel(k);}catch(e){} }
+    save();
+  }
   renderAll();
   toast("한 장을 지웠어요");
 }
@@ -1973,8 +2064,8 @@ function boardView(id){
 }
 /* 조각의 세로/가로 비. 부분이면 잘라낸 자리의 비다. */
 function pinRatio(p){
+  if(p.r) return clamp(regionRatio(p.it,p.r),.06,8);
   const iw=(p.it.img&&p.it.img.w)||3, ih=(p.it.img&&p.it.img.h)||2;
-  if(p.r) return clamp((p.r.h*ih)/Math.max(1e-6,p.r.w*iw),.06,8);
   return clamp(ih/iw,.06,8);
 }
 const pinW=p=>clamp(Math.round(p.pin.w||SWATCH),40,4000);
@@ -2021,9 +2112,10 @@ function boardTagSummary(pins){
 
 function pinHTML(p,i){
   const w=pinW(p), h=pinH(p);
-  const style=p.r? cropStyle(p.it,p.r)
+  const face=p.r?regionFace(p.it,p.r):null;
+  const style=face? face.style
     : 'background-image:url('+urlFor(p.it.img&&p.it.img.key)+');background-size:cover;background-position:center';
-  const clip=(p.r&&p.r.path&&p.r.path.length>2)?';clip-path:'+pathToClip(p.r.path):'';
+  const clip=face?face.clip:'';
   const cap=(p.r?(p.r.text||""):(p.it.title||""))||"";
   const on=(BSEL===pinKey(p.it.id,p.r&&p.r.id))?" on":"";
   return '<figure class="bpin'+on+'" data-pin="'+i+'" style="left:'+p.pin.x+'px;top:'+p.pin.y+
@@ -2198,7 +2290,9 @@ async function exportBoard(b,pins){
   g.fillStyle="#EDECE6"; g.fillRect(0,0,W,H);
 
   for(const p of pins){
-    const im=imgEl(p.it.img&&p.it.img.key);
+    /* 부분에 붙여 둔 사진이 있으면 그걸 통째로, 없으면 원본에서 잘라낸 자리를 */
+    const shot=p.r&&p.r.shot&&p.r.shot.key&&urlFor(p.r.shot.key)?p.r.shot:null;
+    const im=imgEl(shot?shot.key:(p.it.img&&p.it.img.key));
     const dx=(p.pin.x-x0+PAD)*sc, dy=(p.pin.y-y0+PAD)*sc;
     const dw=pinW(p)*sc, dh=pinH(p)*sc;
     g.save();
@@ -2206,8 +2300,9 @@ async function exportBoard(b,pins){
     g.fillStyle="#E3E3DE"; g.fillRect(dx,dy,dw,dh);
     if(im&&im.complete&&im.naturalWidth){
       const iw=im.naturalWidth, ih=im.naturalHeight;
-      const sx=p.r?p.r.x*iw:0, sy=p.r?p.r.y*ih:0;
-      const sw=p.r?Math.max(1,p.r.w*iw):iw, sh=p.r?Math.max(1,p.r.h*ih):ih;
+      const crop=p.r&&!shot;
+      const sx=crop?p.r.x*iw:0, sy=crop?p.r.y*ih:0;
+      const sw=crop?Math.max(1,p.r.w*iw):iw, sh=crop?Math.max(1,p.r.h*ih):ih;
       const k=Math.max(dw/sw,dh/sh);
       g.drawImage(im,sx,sy,sw,sh, dx+dw/2-sw*k/2, dy+dh/2-sh*k/2, sw*k, sh*k);
     }
@@ -2484,8 +2579,7 @@ function regionCardHTML(o){
   return '<article class="card'+(PICKMODE&&PICK.has(key)?" picked":"")+'" data-open="'+o.it.id+'" data-rgsel="'+o.r.id+'" tabindex="0">'+
     '<div class="pins">'+(o.i+1)+'</div>'+
     (PICKMODE?'<span class="tick">'+ICON_CHECK+'</span>':pinBtnHTML(o.it.id,o.r.id))+
-    '<div class="crop" style="'+cropStyle(o.it,o.r)+
-      ((o.r.path&&o.r.path.length>2)?';clip-path:'+pathToClip(o.r.path):"")+'"></div>'+
+    (f=>'<div class="crop'+(f.shot?" shot":"")+'" style="'+f.style+f.clip+'"></div>')(regionFace(o.it,o.r))+
     '<div class="meta">'+memo+(tg?'<div class="row">'+tg+'</div>':"")+
     '<div class="from">'+esc(o.it.title||"제목 없음")+'</div></div></article>';
 }
@@ -2740,6 +2834,7 @@ function noteFromItem(it){
     regions:(it.regions||[]).map(r=>{
       const o={id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",tags:tagNames(r.tags)};
       if(r.path&&r.path.length>2) o.path=r.path;   /* 자동 선택한 면의 윤곽 */
+      if(r.shot) o.shot={file:r.shot.file||null,w:r.shot.w,h:r.shot.h};  /* 따로 붙인 사진 */
       return o;
     }),
     links:it.links||[],
@@ -2752,7 +2847,9 @@ function itemFromNote(d){
     space:sp?sp.id:null,
     tags:tagIds(d.tags),
     regions:(d.regions||[]).map(r=>({id:r.id,x:+r.x,y:+r.y,w:+r.w,h:+r.h,text:r.text||"",
-      path:Array.isArray(r.path)?r.path:null,tags:tagIds(r.tags)})),
+      path:Array.isArray(r.path)?r.path:null,tags:tagIds(r.tags),
+      shot:r.shot?{key:d.id+"__"+r.id,file:r.shot.file||null,
+        w:+r.shot.w||3,h:+r.shot.h||2}:null})),
     links:Array.isArray(d.links)?d.links:[],
     img:{key:d.id,file:(d.image&&d.image.file)||null,w:(d.image&&d.image.w)||3,h:(d.image&&d.image.h)||2},
     createdAt:d.createdAt||Date.now(),updatedAt:d.updatedAt||0};
@@ -2874,9 +2971,12 @@ async function vaultDeleteItem(it){
     const notes=await subDir("notes");
     try{ await notes.removeEntry(it.id+".json"); }catch(e){}
     Vault.seen.delete(it.id+".json");
-    if(it.img&&it.img.file){
+    const files=[];
+    if(it.img&&it.img.file) files.push(it.img.file);
+    (it.regions||[]).forEach(r=>{ if(r.shot&&r.shot.file) files.push(r.shot.file); });
+    if(files.length){
       const imgs=await subDir("images");
-      try{ await imgs.removeEntry(it.img.file); }catch(e){}
+      for(const f of files){ try{ await imgs.removeEntry(f); }catch(e){} }
     }
   }catch(e){ vaultTrouble(e); }
   finally{ Vault.busy--; }
@@ -2942,13 +3042,19 @@ async function loadVaultImages(){
   let imgs;
   try{ imgs=await subDir("images"); }catch(e){ return; }
   let n=0;
-  for(const it of ST.items.slice()){
-    const file=it.img&&it.img.file;
-    if(!file||URLS.has(it.id)) continue;
+  const want=[];
+  ST.items.slice().forEach(it=>{
+    if(it.img&&it.img.file) want.push({key:it.id,file:it.img.file});
+    (it.regions||[]).forEach(r=>{
+      if(r.shot&&r.shot.file) want.push({key:r.shot.key||shotKey(it,r),file:r.shot.file});
+    });
+  });
+  for(const o of want){
+    if(URLS.has(o.key)) continue;
     try{
-      const h=await imgs.getFileHandle(file);
+      const h=await imgs.getFileHandle(o.file);
       const f=await h.getFile();
-      URLS.set(it.id,URL.createObjectURL(f));
+      URLS.set(o.key,URL.createObjectURL(f));
       n++;
       if(n%6===0){ renderArchive(); }
     }catch(e){ /* 이미지 없음 */ }
@@ -3849,6 +3955,9 @@ function renderPanel(){
   renderLinks();
 }
 
+/* 지금 사진을 기다리고 있는 부분 (파일 고르기 창은 하나뿐이라 여기 적어 둔다) */
+let SHOTFOR=null;
+
 /* 이 사진이 어느 공간에 속하는지 고른다. 같은 자리를 여러 각도로 찍었을 때 묶인다. */
 function renderSpacePick(){
   if(!sheetEl||!CUR) return;
@@ -3939,6 +4048,15 @@ function regionHTML(r,i){
     '<button class="rgpin'+(boardHas(boardById(CURBOARD)||(ST.boards||[])[0],CUR?CUR.id:"",r.id)?" on":"")+'" data-pinadd="'+(CUR?CUR.id:"")+'" data-pinrg="'+r.id+'" title="무드보드에 담기">'+ICON_PIN+'</button>'+
     '<button class="del" data-delrg="'+r.id+'" title="지우기"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8"/></svg></button></div>'+
     '<textarea rows="1" data-rgtext="'+r.id+'" placeholder="여기가 왜 좋은지 적어두기"></textarea>'+
+    '<div class="rgshot">'+
+      (r.shot&&urlFor(r.shot.key)
+        ? '<span class="th" style="background-image:url('+urlFor(r.shot.key)+')"></span>'
+        : '')+
+      '<button class="btn ghost" data-shotpick="'+r.id+'">'+
+        (r.shot?'사진 바꾸기':'깔끔한 사진 넣기')+'</button>'+
+      (r.shot?'<button class="btn ghost" data-shotdel="'+r.id+'" title="원본에서 잘라낸 자리로 돌아간다">빼기</button>':'')+
+      (r.shot?'':'<span class="lbl" style="opacity:.7">넣으면 이 부분의 얼굴이 됩니다</span>')+
+    '</div>'+
     '<div style="margin-top:7px" data-rgtags="'+r.id+'"></div></div>';
 }
 function renderRegions(){
@@ -3973,8 +4091,23 @@ function renderRegions(){
   box.querySelectorAll("[data-pinadd]").forEach(b=>b.addEventListener("click",e=>{
     e.stopPropagation(); handlePinClick(b);
   }));
-  box.querySelectorAll("[data-delrg]").forEach(b=>b.addEventListener("click",e=>{
+  box.querySelectorAll("[data-shotpick]").forEach(b=>b.addEventListener("click",e=>{
     e.stopPropagation();
+    SHOTFOR=b.dataset.shotpick;
+    const pick=$("#shotPick");
+    pick.value=""; pick.click();
+  }));
+  box.querySelectorAll("[data-shotdel]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    const r=(CUR.regions||[]).find(x=>x.id===b.dataset.shotdel); if(!r) return;
+    await detachShot(CUR,r);
+    save(CUR); renderRegions(); renderArchive(); graphDirty();
+    toast("붙인 사진을 뺐어요");
+  }));
+  box.querySelectorAll("[data-delrg]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    const gone=(CUR.regions||[]).find(x=>x.id===b.dataset.delrg);
+    if(gone&&gone.shot) await detachShot(CUR,gone);
     CUR.regions=CUR.regions.filter(x=>x.id!==b.dataset.delrg);
     if(SEL===b.dataset.delrg) SEL=null;
     pruneTags(); save(CUR); renderRegions(); renderRail(); graphDirty();
@@ -4546,8 +4679,10 @@ function draw(){
     if(nd.type==="region"){
       const rg=nd.ref.r, it=nd.ref.it;
       const s=nd.r*2, x=nd.x-nd.r, y=nd.y-nd.r;
+      /* 붙여 둔 사진이 있으면 그것을 네모로 — 따로 딴 윤곽은 쓰지 않는다 */
+      const shot=rg.shot&&rg.shot.key&&urlFor(rg.shot.key)?rg.shot:null;
       const shape=()=>{
-        if(rg.path&&rg.path.length>2){
+        if(!shot&&rg.path&&rg.path.length>2){
           ctx.beginPath();
           rg.path.forEach((pt,k)=>{
             const px=x+(pt[0]/100)*s, py=y+(pt[1]/100)*s;
@@ -4557,12 +4692,13 @@ function draw(){
         }else roundRect(ctx,x,y,s,s,3);
       };
       ctx.save(); shape(); ctx.clip();
-      const im=imgEl(it.img&&it.img.key);
+      const im=imgEl(shot?shot.key:(it.img&&it.img.key));
       if(im&&im.complete&&im.naturalWidth){
         const iw=im.naturalWidth, ih=im.naturalHeight;
-        const sw=Math.max(1,rg.w*iw), sh=Math.max(1,rg.h*ih);
+        const sx=shot?0:rg.x*iw, sy=shot?0:rg.y*ih;
+        const sw=shot?iw:Math.max(1,rg.w*iw), sh=shot?ih:Math.max(1,rg.h*ih);
         const sc=Math.max(s/sw,s/sh);
-        ctx.drawImage(im, rg.x*iw, rg.y*ih, sw, sh,
+        ctx.drawImage(im, sx, sy, sw, sh,
           nd.x-sw*sc/2, nd.y-sh*sc/2, sw*sc, sh*sc);
       }else{ ctx.fillStyle=line; ctx.fillRect(x,y,s,s); }
       ctx.restore();
@@ -4801,6 +4937,21 @@ async function saveFile(name,text){
   }catch(e){ return false; }
 }
 const CHUNK=10*1024*1024;
+/* 부분에 붙인 사진의 실제 파일 */
+async function shotBlob(sh){
+  if(!sh) return null;
+  const u=URLS.get(sh.key);
+  if(u){ try{ return await (await fetch(u)).blob(); }catch(e){} }
+  if(Vault.ok){
+    if(!sh.file) return null;
+    try{
+      const imgs=await subDir("images");
+      const h=await imgs.getFileHandle(sh.file);
+      return await h.getFile();
+    }catch(e){ return null; }
+  }
+  try{ return await imgGet(sh.key); }catch(e){ return null; }
+}
 async function itemBlob(it){
   if(Vault.ok){
     const u=URLS.get(it.id);
@@ -4822,8 +4973,22 @@ async function buildPacks(){
       if(blob) dataURL=await blobToDataURL(blob);
     }catch(e){ console.warn(e); }
     const rec=JSON.parse(JSON.stringify(it)); rec.image=dataURL;
-    if(size+dataURL.length>CHUNK&&packs[packs.length-1].length){ packs.push([]); size=0; }
-    packs[packs.length-1].push(rec); size+=dataURL.length+400;
+    let extra=0;
+    /* 부분에 붙인 사진도 함께 — 없으면 백업에서 되살아나지 못한다 */
+    for(const r of (it.regions||[])){
+      if(!r.shot||!r.shot.key) continue;
+      try{
+        const b=await shotBlob(r.shot);
+        if(b){
+          const du=await blobToDataURL(b);
+          const rr=(rec.regions||[]).find(x=>x.id===r.id);
+          if(rr){ rr.shotImage=du; extra+=du.length; }
+        }
+      }catch(e){ console.warn(e); }
+    }
+    const bytes=dataURL.length+extra;
+    if(size+bytes>CHUNK&&packs[packs.length-1].length){ packs.push([]); size=0; }
+    packs[packs.length-1].push(rec); size+=bytes+400;
   }
   return packs;
 }
@@ -4891,7 +5056,7 @@ async function importFiles(files){
         space:rec.space?(spmap.get(rec.space)||null):null,
         tags:fix(rec.tags),
         regions:(rec.regions||[]).map(r=>({id:r.id,x:r.x,y:r.y,w:r.w,h:r.h,text:r.text||"",
-          path:Array.isArray(r.path)?r.path:null,tags:fix(r.tags)})),
+          path:Array.isArray(r.path)?r.path:null,tags:fix(r.tags),shot:null})),
         links:rec.links||[],
         img:null,
         createdAt:rec.createdAt||Date.now(), updatedAt:Date.now()
@@ -4912,6 +5077,22 @@ async function importFiles(files){
         }
         ST.items.push(it);
       }
+      /* 부분에 붙여 두었던 사진 되살리기 */
+      for(const r of it.regions){
+        const src=(rec.regions||[]).find(x=>x.id===r.id);
+        if(!src||!src.shotImage) continue;
+        try{
+          const sb=await (await fetch(src.shotImage)).blob();
+          const key=shotKey(it,r);
+          r.shot={key:key,file:null,w:(src.shot&&src.shot.w)||3,h:(src.shot&&src.shot.h)||2};
+          if(Vault.ok){
+            const ext=(sb.type||"").indexOf("webp")>=0?"webp":"jpg";
+            await vaultWriteShot(it,r,sb,ext);
+          }else await imgPut(key,sb);
+          URLS.set(key,URL.createObjectURL(sb));
+        }catch(e){ console.warn(e); r.shot=null; }
+      }
+      if(Vault.ok&&it.regions.some(r=>r.shot)) await vaultWriteNote(it);
       items++;
     }
   }
@@ -4963,6 +5144,18 @@ function wire(){
   $("#filePick").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
   $("#btnCam").addEventListener("click",()=>$("#camPick").click());
   $("#camPick").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
+  $("#shotPick").addEventListener("change",async e=>{
+    const f=e.target.files&&e.target.files[0];
+    e.target.value="";
+    const rid=SHOTFOR; SHOTFOR=null;
+    if(!f||!rid||!CUR) return;
+    const r=(CUR.regions||[]).find(x=>x.id===rid);
+    if(!r) return;
+    if(await attachShot(CUR,r,f)){
+      save(CUR); renderRegions(); renderArchive(); graphDirty();
+      toast("이 부분의 사진으로 넣었어요");
+    }
+  });
   $("#btnImport").addEventListener("click",()=>$("#importPick").click());
   $("#importPick").addEventListener("change",e=>{ importFiles(e.target.files); e.target.value=""; });
   $("#btnExport").addEventListener("click",exportAll);
