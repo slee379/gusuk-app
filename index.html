@@ -624,8 +624,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
 }
 .spname::placeholder{color:var(--faint)}
 .spacehead .note{margin-bottom:16px}
-.spacehead .facts h3{display:flex;gap:8px;align-items:baseline;margin:0 0 8px;
+.spacehead .facts h3,.spacehead .sptags h3{display:flex;gap:8px;align-items:baseline;margin:0 0 8px;
   padding-top:14px;border-top:1px solid var(--line)}
+.spacehead .sptags{margin-bottom:4px}
+/* 사진 상세: 공간에서 물려받은 태그 — 보여만 주고 여기서 떼지는 않는다 */
+.spinherit{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px}
+.spinherit .lbl{flex:0 0 100%}
 .factrow{display:flex;gap:6px;margin-bottom:6px;align-items:center}
 .factrow input{
   border:1px solid var(--line);background:var(--paper);border-radius:3px;
@@ -1235,7 +1239,7 @@ function ensureSpace(name){
   if(!clean) return null;
   let sp=spaceByName(clean);
   if(sp) return sp;
-  sp={id:uid("s"),name:clean,note:"",facts:[],cover:null,
+  sp={id:uid("s"),name:clean,note:"",facts:[],tags:[],cover:null,
       createdAt:Date.now(),updatedAt:Date.now()};
   ST.spaces=(ST.spaces||[]).concat([sp]);
   return sp;
@@ -1476,15 +1480,31 @@ function reguessTags(){
   });
   return n;
 }
-function itemTagIds(it){
+/* 사진 자신에게 붙은 태그 (부분에 붙은 것까지) */
+function ownTagIds(it){
   const s=new Set(it.tags||[]);
   (it.regions||[]).forEach(r=>(r.tags||[]).forEach(id=>s.add(id)));
+  return Array.from(s);
+}
+/* 공간에서 물려받은 것까지 — 거르기·세기·카드는 이쪽을 본다.
+
+   공간에 "성수동" 을 한 번 달면 그 안의 사진이 전부 성수동으로 찾아진다.
+   같은 말을 사진마다 되풀이해 적지 않으려고 묶어 둔 것이니, 태그도
+   묶음을 따라가는 게 맞다. 사진 자신의 태그는 ownTagIds 로 따로 본다. */
+function itemTagIds(it){
+  const s=new Set(ownTagIds(it));
+  if(it.space){
+    const sp=spaceById(it.space);
+    if(sp) (sp.tags||[]).forEach(id=>s.add(id));
+  }
   return Array.from(s);
 }
 function tagCount(id){ return ST.items.reduce((n,it)=>n+(itemTagIds(it).indexOf(id)>=0?1:0),0); }
 function pruneTags(){
   const used=new Set();
   ST.items.forEach(it=>itemTagIds(it).forEach(id=>used.add(id)));
+  /* 아직 사진이 없는 공간에 달아 둔 태그도 살려 둔다 */
+  (ST.spaces||[]).forEach(sp=>(sp.tags||[]).forEach(id=>used.add(id)));
   ST.tags=ST.tags.filter(t=>used.has(t.id));
 }
 function catColor(catId){ return cssVar((CATMAP[catId]||CATMAP.etc).v)||"#888"; }
@@ -1501,6 +1521,7 @@ function itemsUsingTag(id){
 async function persistTagChange(touched){
   if(Vault.ok){
     await vaultWriteTags();
+    await vaultWriteSpaces();      /* 공간 태그도 이름으로 적혀 있다 */
     for(const it of touched){ it.updatedAt=Date.now(); await vaultWriteNote(it); }
   }else save();
 }
@@ -1521,6 +1542,7 @@ function renameTag(id,nextName){
       it.tags=swap(it.tags);
       (it.regions||[]).forEach(r=>{ r.tags=swap(r.tags); });
     });
+    (ST.spaces||[]).forEach(sp=>{ sp.tags=swap(sp.tags); });
     ST.tags=ST.tags.filter(x=>x.id!==id);
     toast('"'+t.name+'" 을(를) "'+dup.name+'" 에 합쳤어요');
   }else{
@@ -1551,6 +1573,7 @@ function deleteTagEverywhere(id){
     it.tags=(it.tags||[]).filter(x=>x!==id);
     (it.regions||[]).forEach(r=>{ r.tags=(r.tags||[]).filter(x=>x!==id); });
   });
+  (ST.spaces||[]).forEach(sp=>{ sp.tags=(sp.tags||[]).filter(x=>x!==id); });
   ST.tags=ST.tags.filter(x=>x.id!==id);
   persistTagChange(touched);
   renderRail(); renderArchive(); graphDirty();
@@ -1585,7 +1608,8 @@ function itemMatches(it){
 function filtered(){ return ST.items.filter(itemMatches).sort((a,b)=>b.createdAt-a.createdAt); }
 
 function regionMatches(it,r){
-  const ids=new Set((r.tags||[]).concat(it.tags||[]));
+  const sp=it.space?spaceById(it.space):null;
+  const ids=new Set((r.tags||[]).concat(it.tags||[]).concat(sp?(sp.tags||[]):[]));
   if(FILTER.tags.size){
     if(FILTER.mode==="and"){ for(const t of FILTER.tags) if(!ids.has(t)) return false; }
     else { let any=false; for(const t of FILTER.tags) if(ids.has(t)){any=true;break;} if(!any) return false; }
@@ -2474,6 +2498,8 @@ function spaceCardHTML(sp,shown,total){
   const ratio=cov&&cov.img&&cov.img.w?(cov.img.h/cov.img.w*100):66;
   const n=shown<total? shown+" / "+total : String(total);
   const facts=(sp.facts||[]).length;
+  const tg=(sp.tags||[]).slice(0,4).map(id=>{const t=tagById(id);if(!t)return"";
+    return '<span class="mini"><i class="dot" style="background:var('+CATMAP[t.cat].v+')"></i>'+esc(t.name)+'</span>';}).join("");
   return '<article class="card space" data-space="'+sp.id+'" tabindex="0">'+
     '<div class="stack">'+
       (src?'<img loading="lazy" src="'+src+'" alt="">'
@@ -2483,7 +2509,8 @@ function spaceCardHTML(sp,shown,total){
     '<div class="meta">'+
       '<div class="t">'+esc(sp.name)+'</div>'+
       (sp.note?'<div class="memo">'+esc(sp.note)+'</div>':"")+
-      (facts?'<div class="row"><span class="mini">사실 '+facts+'</span></div>':"")+
+      (tg||facts?'<div class="row">'+tg+
+        (facts?'<span class="mini">사실 '+facts+'</span>':"")+'</div>':"")+
     '</div></article>';
 }
 
@@ -2498,6 +2525,11 @@ function spaceHeadHTML(sp){
   return '<div class="spacehead">'+
     '<input class="spname" id="spName" value="'+esc(sp.name)+'" placeholder="공간 이름">'+
     '<textarea class="note" id="spNote" rows="1" placeholder="이 공간은 어떤 곳인지">'+esc(sp.note||"")+'</textarea>'+
+    '<div class="sptags">'+
+      '<h3><span class="lbl">공간 태그</span>'+
+        '<span class="lbl" style="opacity:.7">여기 담긴 사진이 모두 물려받는다</span></h3>'+
+      '<div id="spTags"></div>'+
+    '</div>'+
     '<div class="facts">'+
       '<h3><span class="lbl">사실</span><span class="lbl" style="opacity:.7">치수·마감재·시기처럼 취향이 아닌 것</span></h3>'+
       '<div id="factList">'+rows+'</div>'+
@@ -2644,6 +2676,13 @@ function wireSpaceHead(sp){
   if(nt){ autoGrow(nt); nt.addEventListener("input",()=>{
     autoGrow(nt); sp.note=nt.value; sp.updatedAt=Date.now(); saveSpaces();
   }); }
+  const tf=wrap.querySelector("#spTags");
+  if(tf) TagField(tf,()=>sp.tags||[],ids=>{sp.tags=ids;},"#장소, #누구의 것, #언제 … 적고 Enter",
+    ()=>{
+      sp.updatedAt=Date.now();
+      saveSpaces(); renderRail(); graphDirty();
+      /* 아카이브를 다시 그리지 않는다 — 지금 쓰고 있는 칸이 이 안에 있다 */
+    });
   const add=wrap.querySelector("#addFact");
   if(add) add.addEventListener("click",()=>{
     sp.facts=(sp.facts||[]).concat([{k:"",v:""}]);
@@ -2764,6 +2803,7 @@ async function vaultWriteSpaces(){
   try{
     const payload={app:"gusuk",v:1,updatedAt:Date.now(),
       spaces:(ST.spaces||[]).map(sp=>({name:sp.name,note:sp.note||"",keep:!!sp.keep,
+        tags:tagNames(sp.tags),
         facts:(sp.facts||[]).map(f=>({k:f.k,v:f.v}))}))};
     Vault.spacesSeen=await writeText(Vault.dir,"spaces.json",JSON.stringify(payload,null,1));
   }catch(e){ vaultTrouble(e); }
@@ -2778,6 +2818,7 @@ function applySpaceMeta(list){
     if(!sp) return;
     sp.note=rec.note||"";
     if(rec.keep) sp.keep=true;      /* 아직 비어 있어도 남겨둘 공간 */
+    sp.tags=tagIds(rec.tags);
     sp.facts=Array.isArray(rec.facts)?rec.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")})):[];
   });
 }
@@ -3537,7 +3578,10 @@ function ensureAuto(it, im) {
   return true;
 }
 
-function TagField(host,getIds,setIds,placeholder){
+/* onAfter 를 주면 태그가 바뀐 뒤의 뒷정리를 그쪽에 맡긴다.
+   사진 상세는 아카이브를 다시 그려도 되지만, 공간 머리말은 그 자신이
+   아카이브 안에 있어서 다시 그리면 입력칸이 통째로 사라진다. */
+function TagField(host,getIds,setIds,placeholder,onAfter){
   host.innerHTML='<div class="sugs"><div class="tagfield"></div><div class="sugbox" hidden></div></div>';
   const field=host.querySelector(".tagfield"), sugbox=host.querySelector(".sugbox");
   const input=document.createElement("input");
@@ -3595,7 +3639,11 @@ function TagField(host,getIds,setIds,placeholder){
     ed.addEventListener("blur",()=>finish(true));
     ed.focus(); ed.select();
   }
-  function afterChange(){ pruneTags(); save(CUR); renderRail(); renderArchive(); graphDirty(); }
+  function afterChange(){
+    pruneTags();
+    if(onAfter){ onAfter(); return; }
+    save(CUR); renderRail(); renderArchive(); graphDirty();
+  }
 
   function commit(name,cat){
     const t=ensureTag(String(name||"").replace(/^[#＃]+/,""),cat); if(!t) return;
@@ -3817,6 +3865,11 @@ function renderSpacePick(){
       '<input id="spNewName" placeholder="공간 이름 (예: 성수동 카페 A)">'+
       '<button class="btn" id="spNewOk">만들기</button>'+
     '</div>'+
+    (cur&&(cur.tags||[]).length?
+      '<div class="spinherit"><span class="lbl">이 공간에서 물려받음</span>'+
+      (cur.tags||[]).map(id=>{const t=tagById(id);if(!t)return"";
+        return '<span class="mini"><i class="dot" style="background:var('+CATMAP[t.cat].v+')"></i>'+esc(t.name)+'</span>';}).join("")+
+      '</div>':"")+
     (cur?'<button class="btn ghost spgo" data-gospace="'+cur.id+'">이 공간 열기 ('+spaceItems(cur.id).length+'장)</button>':"");
 
   const sel=box.querySelector("#spSel"), nb=box.querySelector("#spNew");
@@ -4279,6 +4332,7 @@ function buildGraph(){
      아카이브에서 이미 하나로 접혀 있는 것들이 그래프에서만 따로 놀면
      같은 자료를 두 가지로 말하는 셈이 된다. 그래서 여기서도 묶는다.
      선을 짧고 세게 걸어 서로 끌어당기게 하고, 가운데에 이름을 세운다. */
+  const spaceNodes=new Set();
   if(OPT.space){
     const byS=new Map();
     items.forEach(it=>{
@@ -4296,6 +4350,7 @@ function buildGraph(){
       nodes.push({id:id,type:"space",ref:sp,
         r:relSize(SW.get(sid),SM,NAVG.space,NMIN.space),
         x:pos.x,y:pos.y,vx:0,vy:0,label:sp.name});
+      spaceNodes.add(sid);
       list.forEach(it=>edges.push({a:id,b:it.id,kind:"space",w:2.6,len:52+list.length*3}));
     });
   }
@@ -4316,10 +4371,24 @@ function buildGraph(){
         x:pos.x,y:pos.y,vx:0,vy:0,label:t.name,color:catColor(t.cat)});
     });
     const known=new Set(ST.tags.map(t=>t.id));
+    /* 공간 노드가 서 있으면 공간 태그는 거기에 한 번만 건다 — 그 선을
+       식구 사진마다 되풀이해 그으면 판이 실타래가 된다. 공간 노드를
+       끈 상태에서는 물려받은 태그를 사진에 직접 건다. */
+    (ST.spaces||[]).forEach(sp=>{
+      if(!spaceNodes.has(sp.id)) return;
+      (sp.tags||[]).forEach(tid=>{ if(!known.has(tid)) return;
+        edges.push({a:"s:"+sp.id,b:"t:"+tid,kind:"tag",w:1.2,len:80});
+        noteUse(tid,"s:"+sp.id);
+      });
+    });
     items.forEach(it=>{
+      const inherited=spaceNodes.has(it.space);
       if(REG){
         /* 사진에 직접 붙인 태그만 사진에, 부분 태그는 그 부분에 */
-        (it.tags||[]).forEach(tid=>{ if(!known.has(tid)) return;
+        const own=(it.tags||[]).slice();
+        const list=inherited? own : Array.from(new Set(own.concat(
+          it.space?((spaceById(it.space)||{}).tags||[]):[])));
+        list.forEach(tid=>{ if(!known.has(tid)) return;
           edges.push({a:it.id,b:"t:"+tid,kind:"tag",w:1,len:74}); noteUse(tid,it.id); });
         (it.regions||[]).forEach(r=>{
           const rid="r:"+it.id+":"+r.id;
@@ -4327,7 +4396,7 @@ function buildGraph(){
             edges.push({a:rid,b:"t:"+tid,kind:"tag",w:1,len:66}); noteUse(tid,rid); });
         });
       }else{
-        itemTagIds(it).forEach(tid=>{ if(!known.has(tid)) return;
+        (inherited?ownTagIds(it):itemTagIds(it)).forEach(tid=>{ if(!known.has(tid)) return;
           edges.push({a:it.id,b:"t:"+tid,kind:"tag",w:1,len:78}); noteUse(tid,it.id); });
       }
     });
@@ -4637,7 +4706,8 @@ function wireGraph(){
         const tc=(n.ref.r.tags||[]).length;
         sub=esc(n.ref.it.title||"제목 없음")+" · "+(tc?tc+"개의 태그":"태그 없음");
       }else if(n.type==="space"){
-        sub="공간 · "+spaceItems(n.ref.id).length+"장";
+        const stc=(n.ref.tags||[]).length;
+        sub="공간 · "+spaceItems(n.ref.id).length+"장"+(stc?" · 태그 "+stc+"개":"");
       }else sub=CATMAP[n.ref.cat].name+" · "+tagCount(n.ref.id)+"장";
       tip.innerHTML='<div class="lbl">'+esc(sub)+'</div>'+esc(n.label);
       tip.hidden=false;
@@ -4797,6 +4867,7 @@ async function importFiles(files){
         nb.pins.push(np);
       });
     });
+    const fix=ids=>(ids||[]).map(id=>remap.get(id)||id).filter(id=>ST.tags.some(t=>t.id===id));
     /* 공간도 id 가 아니라 이름으로 맞춘다 — 다른 기기에서 온 백업이어도 같은 이름이면 합쳐진다 */
     const spmap=new Map();
     (data.spaces||[]).forEach(sp=>{
@@ -4804,10 +4875,13 @@ async function importFiles(files){
       spmap.set(sp.id,ns.id);
       if(sp.note&&!ns.note) ns.note=sp.note;
       if(sp.keep) ns.keep=true;
+      if(Array.isArray(sp.tags)&&sp.tags.length){
+        const merged=(ns.tags||[]).concat(fix(sp.tags));
+        ns.tags=merged.filter((x,i)=>merged.indexOf(x)===i);
+      }
       if(Array.isArray(sp.facts)&&!(ns.facts||[]).length)
         ns.facts=sp.facts.filter(f=>f&&f.k).map(f=>({k:String(f.k),v:String(f.v||"")}));
     });
-    const fix=ids=>(ids||[]).map(id=>remap.get(id)||id).filter(id=>ST.tags.some(t=>t.id===id));
     for(const rec of data.items){
       if(ST.items.some(x=>x.id===rec.id)) continue;
       let blob=null;
