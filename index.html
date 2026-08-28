@@ -449,6 +449,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .card.space .spdel svg{width:11px;height:11px}
 @media (max-width:820px){ .card.space .spdel{opacity:1} }
 
+/* 설정 버튼 — 톱니와 상태 램프만 */
+.vbtn .gear{width:14px;height:14px;flex:none}
+.vbtn{gap:6px}
+@media (max-width:820px){ .vbtn{padding:0 9px} }
+
 /* 폴더가 잠긴 채 사본만 보고 있을 때의 얇은 띠 */
 .lockbar{
   display:flex;align-items:center;gap:9px;flex-wrap:wrap;
@@ -952,12 +957,6 @@ button{background:none;border:0;padding:0;cursor:pointer}
   </div>
   <div class="sp"></div>
   <span class="lbl" id="stat"></span>
-  <div class="vault" id="vaultWrap" hidden>
-    <button class="vbtn" id="vaultBtn"><i class="led"></i><span class="nm">폴더 연결</span><span class="st"></span></button>
-    <div class="vpop" id="vaultPop" hidden></div>
-  </div>
-  <button class="btn ghost only-desktop" id="btnImport" title="백업 파일에서 불러오기">불러오기</button>
-  <button class="btn only-desktop" id="btnExport">백업 저장</button>
 
   <!-- 폰에서만: 태그·검색 시트 열기 -->
   <button class="btn only-mobile" id="btnFilter" aria-expanded="false" aria-controls="rail" title="태그로 모아보기">
@@ -973,6 +972,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
     <span class="only-desktop">사진 추가</span>
   </button>
+
+  <!-- 설정 — 저장 폴더와 백업은 여기서만 만진다 -->
+  <div class="vault" id="vaultWrap" hidden>
+    <button class="vbtn" id="vaultBtn" title="설정">
+      <i class="led"></i>
+      <svg class="gear" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="8" cy="8" r="2.1"/>
+        <path d="M8 1.6v1.7M8 12.7v1.7M14.4 8h-1.7M3.3 8H1.6M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2M12.5 12.5l-1.2-1.2M4.7 4.7 3.5 3.5" stroke-linecap="round"/>
+      </svg>
+      <span class="only-desktop">설정</span>
+    </button>
+    <div class="vpop" id="vaultPop" hidden></div>
+  </div>
 </header>
 
 <input type="file" id="filePick" accept="image/*" multiple class="sr" tabindex="-1">
@@ -2971,7 +2983,7 @@ function blankHTML(){
 }
 
 /* ══ 폴더 저장소 (옵시디언 방식) ═══════════════════════ */
-const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,spacesSeen:0,boardsSeen:0,timer:null,loading:false,mirror:false};
+const Vault={dir:null,ok:false,name:"",busy:0,lastSync:0,seen:new Map(),tagsSeen:0,spacesSeen:0,boardsSeen:0,timer:null,loading:false,mirror:false,denied:false};
 const FS_OK = typeof window.showDirectoryPicker === "function";
 
 function tagNames(ids){
@@ -3421,7 +3433,29 @@ async function loadMirror(){
     }
   }
   renderAll(); renderVaultUI();
+  armAutoGrant();
   return true;
+}
+
+/* 권한은 사용자의 손가락질 없이는 청할 수 없다 (브라우저 규칙).
+   그래서 화면을 띄운 뒤 '첫 손가락질'을 기다렸다가 그때 청한다.
+   사용자는 늘 하던 대로 앱을 만지면 되고, 잠금 띠를 따로 신경 쓸 일이 없다. */
+let autoGrantArmed=false;
+function armAutoGrant(){
+  if(autoGrantArmed||!Vault.mirror) return;
+  autoGrantArmed=true;
+  const fire=()=>{
+    off();
+    if(!Vault.mirror) return;
+    reconnectFolder();
+  };
+  const off=()=>{
+    autoGrantArmed=false;
+    document.removeEventListener("pointerdown",fire,true);
+    document.removeEventListener("keydown",fire,true);
+  };
+  document.addEventListener("pointerdown",fire,true);
+  document.addEventListener("keydown",fire,true);
 }
 
 /* 사본 상태에서 뭔가 고치려 하면 — 그 손가락질로 권한을 청한다 */
@@ -3455,8 +3489,14 @@ async function reconnectFolder(){
   if(!Vault.dir) return pickFolder();
   try{
     const r=await Vault.dir.requestPermission({mode:"readwrite"});
-    if(r!=="granted"){ toast("폴더 권한이 필요해요.",true); return; }
+    if(r!=="granted"){
+      /* 거절했다면 그때만 띠를 보여준다 — 다시 누를 자리가 있어야 하므로 */
+      Vault.denied=true; renderVaultUI();
+      toast("보기만 할 수 있어요. 고치려면 폴더를 열어주세요.");
+      return;
+    }
   }catch(e){ return pickFolder(); }
+  Vault.denied=false;
   Vault.ok=true; Vault.mirror=false;
   await vaultLoadAll(); startWatch(); renderVaultUI();
 }
@@ -3517,20 +3557,17 @@ function renderVaultUI(){
       : "";
     return;
   }
-  const btn=$("#vaultBtn"), led=btn.querySelector(".led"),
-        nm=btn.querySelector(".nm"), st=btn.querySelector(".st");
+  const btn=$("#vaultBtn"), led=btn.querySelector(".led");
   if(Vault.ok){
     btn.classList.remove("off");
-    nm.textContent=Vault.name||"폴더";
     const pend=DIRTY.size||Vault.busy||Vault.loading;
     led.className="led "+(pend?"wait":"on");
-    st.textContent=Vault.loading?"읽는 중":(pend?"저장 중":(Vault.lastSync?"· "+timeAgo(Vault.lastSync):""));
+    btn.title = pend? "저장 중 · "+(Vault.name||"폴더") : (Vault.name||"폴더")+" 에 저장 중";
     if(setup) setup.innerHTML="";
   }else{
     btn.classList.add("off");
     led.className="led"+(Vault.dir?" err":"");
-    nm.textContent=Vault.dir?"폴더 다시 연결":"폴더 연결";
-    st.textContent="";
+    btn.title = Vault.dir? "폴더가 잠겨 있어요 — 눌러서 열기" : "저장할 폴더 고르기";
     if(setup) setup.innerHTML=setupHTML();
   }
 }
@@ -3542,10 +3579,12 @@ function setupHTML(){
   if(Vault.dir){
     /* 사본이 이미 화면을 채우고 있으면, 막아 세우지 말고 얇은 띠만 */
     if(Vault.mirror){
+      /* 평소엔 아무것도 띄우지 않는다 — 첫 손가락질에 알아서 권한을 청하므로.
+         사용자가 허용을 거절했을 때만, 다시 누를 자리를 남긴다. */
+      if(!Vault.denied) return "";
       return '<div class="lockbar">'+
         '<span class="lbl">보기만 · <code>'+esc(Vault.name)+'</code> 잠김</span>'+
-        '<button class="btn primary" data-v="reconnect">폴더 열기</button>'+
-        '<button class="btn ghost" data-v="pick">다른 폴더</button></div>';
+        '<button class="btn primary" data-v="reconnect">폴더 열기</button></div>';
     }
     return '<div class="setup"><h3>폴더 권한이 필요해요</h3>'+
       '<p>브라우저를 새로 열면 폴더 접근 권한을 한 번 더 확인합니다. 아래를 누르고 허용하면 <code>'+esc(Vault.name)+'</code> 폴더의 기록이 그대로 돌아와요.</p>'+
@@ -3559,22 +3598,35 @@ function setupHTML(){
     '<div class="tree">좋아하는 구석/\n├ notes/      사진마다 메모·태그 한 파일\n├ images/     사진 원본\n└ tags.json   태그 목록</div></div>';
 }
 function vaultPopHTML(){
-  if(Vault.ok){
-    return '<h4>'+esc(Vault.name)+'</h4>'+
-      '<p>사진과 메모가 이 폴더에 파일로 저장돼요. 다른 컴퓨터에서 바꾼 내용은 20초마다, 그리고 창을 다시 열 때 자동으로 들어옵니다.</p>'+
-      '<div class="path">마지막 확인 '+esc(timeAgo(Vault.lastSync)||"—")+'</div>'+
-      '<div class="acts"><button class="btn" data-v="sync">지금 새로고침</button>'+
-      '<button class="btn" data-v="pick">폴더 바꾸기</button></div>'+
-      '<hr><p>폰에서 보려면 묶음 파일을 만들어 두세요. 드라이브 앱에서 그 파일을 골라 아카이브 링크에 불러오면 됩니다.</p>'+
-      '<div class="acts"><button class="btn" data-v="mobile">폰에서 볼 묶음 갱신</button>'+
-      '<button class="btn ghost" data-v="export">백업 파일로</button></div>';
+  const backup='<hr>'+
+    '<h4>백업</h4>'+
+    '<p>다른 기기로 옮길 때 씁니다. 폴더를 쓰고 있어도 가끔 받아 두면 안전해요.</p>'+
+    '<div class="acts"><button class="btn" data-v="export">백업 저장</button>'+
+    '<button class="btn ghost" data-v="import">불러오기</button></div>';
+
+  if(!FS_OK){
+    return '<h4>저장 위치</h4>'+
+      '<p>이 브라우저에는 이 기기 안에만 저장됩니다. 폴더에 파일로 쌓으려면 Chrome이나 Edge에서 열어주세요.</p>'+backup;
   }
-  if(!FS_OK) return '<h4>폴더 저장 불가</h4><p>Chrome이나 Edge에서 이 파일을 열면 폴더에 저장할 수 있어요.</p>';
-  if(Vault.dir) return '<h4>다시 연결</h4><p>브라우저를 새로 열면 폴더 권한을 한 번 더 확인해요.</p>'+
-    '<div class="acts"><button class="btn primary" data-v="reconnect">'+esc(Vault.name)+' 연결</button>'+
-    '<button class="btn" data-v="pick">다른 폴더</button></div>';
-  return '<h4>폴더 연결</h4><p>구글 드라이브 안의 폴더를 고르면 그 안에 파일로 저장하고, 다른 컴퓨터와 이어집니다.</p>'+
-    '<div class="acts"><button class="btn primary" data-v="pick">폴더 고르기</button></div>';
+  if(Vault.ok){
+    return '<h4>저장 위치</h4>'+
+      '<div class="path">'+esc(Vault.name)+'</div>'+
+      '<p>사진과 메모가 이 폴더에 파일로 저장돼요. 다른 컴퓨터에서 바꾼 내용은 20초마다 자동으로 들어옵니다.</p>'+
+      '<div class="acts"><button class="btn" data-v="sync">지금 새로고침</button>'+
+      '<button class="btn ghost" data-v="pick">폴더 바꾸기</button></div>'+
+      '<p class="lbl" style="margin-top:2px">마지막 확인 '+esc(timeAgo(Vault.lastSync)||"—")+'</p>'+
+      backup;
+  }
+  if(Vault.dir){
+    return '<h4>저장 위치</h4>'+
+      '<div class="path">'+esc(Vault.name)+' · 잠김</div>'+
+      '<p>브라우저를 새로 열면 폴더 권한을 한 번 더 확인합니다. 아래를 누르고 허용하면 그대로 이어집니다.</p>'+
+      '<div class="acts"><button class="btn primary" data-v="reconnect">폴더 열기</button>'+
+      '<button class="btn ghost" data-v="pick">폴더 바꾸기</button></div>'+backup;
+  }
+  return '<h4>저장 위치</h4>'+
+    '<p>폴더를 고르면 사진과 메모가 그 안에 파일로 쌓입니다. 구글 드라이브 안에 두면 다른 컴퓨터와도 이어집니다.</p>'+
+    '<div class="acts"><button class="btn primary" data-v="pick">폴더 고르기</button></div>'+backup;
 }
 function closeVaultPop(){ const p=$("#vaultPop"); if(p){ p.hidden=true; p.innerHTML=""; } }
 function vaultAction(v){
@@ -3583,6 +3635,7 @@ function vaultAction(v){
   else if(v==="sync"){ vaultSync(false); toast("폴더를 다시 읽었어요"); }
   else if(v==="mobile") writeMobileBundle();
   else if(v==="export") exportAll();
+  else if(v==="import"){ $("#importPick").click(); }
   else if(v==="skip"){ const b=$("#setupBox"); if(b) b.innerHTML=""; renderArchive(); }
   closeVaultPop();
 }
@@ -5647,9 +5700,8 @@ function wire(){
       toast("이 부분의 사진으로 넣었어요");
     }
   });
-  $("#btnImport").addEventListener("click",()=>$("#importPick").click());
+  /* 불러오기·백업 저장은 이제 설정 팝오버 안에 있다 (vaultAction 이 부른다) */
   $("#importPick").addEventListener("change",e=>{ importFiles(e.target.files); e.target.value=""; });
-  $("#btnExport").addEventListener("click",exportAll);
 
   /* 모바일 태그 시트 */
   $("#btnFilter").addEventListener("click",()=>Rail.toggle());
