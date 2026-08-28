@@ -4230,7 +4230,10 @@ function renderPanel(){
   sheetEl.querySelector("#pDate").textContent=fmtDate(CUR.createdAt);
   const n=sheetEl.querySelector("#pNote");
   n.value=CUR.note||""; autoGrow(n);
-  PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},"#색  #소재  #분위기 … 적고 Enter");
+  /* 태그를 하나 붙일 때마다 추천을 다시 계산한다 — 붙일수록 좋아지게 */
+  PTAGS=TagField(sheetEl.querySelector("#pTags"),()=>CUR.tags||[],ids=>{CUR.tags=ids;},
+    "#색  #소재  #분위기 … 적고 Enter",
+    ()=>{ save(CUR); renderRail(); renderArchive(); graphDirty(); renderAuto(); });
   renderAuto();
   renderSpacePick();
   renderLinks();
@@ -4292,21 +4295,90 @@ function setItemSpace(id){
 }
 
 /* 사진에서 읽어낸 색을 태그 후보로 보여준다. 누르면 태그가 된다. */
+/* ══ 함께 쓰이던 태그 ═══════════════════════════════════
+   색만으로는 "올리브"까지가 한계다. 그 너머는 내 기록에서 배운다 —
+   올리브를 붙인 사진들에 늘 '오크'와 '간접조명'이 같이 있었다면 그걸 권한다.
+
+   내 어휘 안에서만 고르므로 없는 말을 지어내지 않는다.
+   씨앗은 두 갈래: 사진에서 읽어낸 색 + 이 사진에 이미 붙인 태그.
+   그래서 하나를 붙일수록 다음 추천이 좋아진다. */
+function relatedTags(seedIds, excludeIds, limit){
+  const seeds=new Set(seedIds.filter(Boolean));
+  if(!seeds.size) return [];
+  const skip=new Set(excludeIds||[]);
+  const total=ST.items.length;
+  if(total<3) return [];                 /* 표본이 너무 적으면 우연이 지배한다 */
+
+  /* 씨앗 태그를 하나라도 가진 사진들 */
+  const near=ST.items.filter(it=>itemTagIds(it).some(id=>seeds.has(id)));
+  if(near.length<2) return [];
+
+  const together=new Map();
+  near.forEach(it=>itemTagIds(it).forEach(id=>{
+    if(seeds.has(id)||skip.has(id)) return;
+    together.set(id,(together.get(id)||0)+1);
+  }));
+
+  const out=[];
+  together.forEach((n,id)=>{
+    if(n<2) return;                      /* 한 번 겹친 건 우연으로 본다 */
+    const t=tagById(id); if(!t) return;
+    const base=tagCount(id);
+    /* 조건부 확률 × 들림(lift) — 흔하기만 한 태그가 늘 1등이 되지 않게 */
+    const cond=n/near.length;
+    const lift=cond/Math.max(1e-6,base/total);
+    if(lift<1.15) return;                /* 씨앗과 무관하게 흔한 태그는 뺀다 */
+    /* 왜 권하는지 — 겹친 씨앗 중 가장 자주 같이 나온 것 */
+    let why=null, whyN=0;
+    seeds.forEach(sid=>{
+      const c=ST.items.filter(it=>{
+        const ids=itemTagIds(it);
+        return ids.indexOf(sid)>=0 && ids.indexOf(id)>=0;
+      }).length;
+      if(c>whyN){ whyN=c; why=tagById(sid); }
+    });
+    out.push({name:t.name,cat:t.cat,id:id,n:n,score:cond*Math.min(3,lift),
+      why:why?why.name:null,whyN:whyN});
+  });
+  out.sort((a,b)=>b.score-a.score||b.n-a.n);
+  return out.slice(0,limit||4);
+}
+
 function renderAuto(){
   if(!sheetEl||!CUR) return;
   const box=sheetEl.querySelector("#pAuto");
   const list=AUTO.get(CUR.id);
   if(!list||!list.length){ box.hidden=true; box.innerHTML=""; return; }
-  const have=new Set((CUR.tags||[]).map(id=>{const t=tagById(id);return t?t.name:"";}));
+  const mine=CUR.tags||[];
+  const have=new Set(mine.map(id=>{const t=tagById(id);return t?t.name:"";}));
   const rest=list.filter(s=>!have.has(s.name));
-  if(!rest.length){ box.hidden=true; box.innerHTML=""; return; }
+
+  /* 씨앗 = 사진에서 읽어낸 색 중 이미 태그로 존재하는 것 + 이 사진에 붙인 태그 */
+  const seedIds=[];
+  list.forEach(s=>{ const t=tagByName(s.name); if(t) seedIds.push(t.id); });
+  mine.forEach(id=>seedIds.push(id));
+  const rel=relatedTags(seedIds,mine,4);
+
+  if(!rest.length&&!rel.length){ box.hidden=true; box.innerHTML=""; return; }
   box.hidden=false;
-  box.innerHTML='<div class="autohead"><span class="lbl">사진의 색에서</span></div>'+
-    '<div class="autolist">'+rest.map(s=>
-      '<button class="tg" data-auto="'+esc(s.name)+'" data-autocat="'+esc(s.cat)+'">'+
-      (s.hex? '<i class="sw" style="background:'+esc(s.hex)+'"></i>'
-            : '<i class="dot" style="background:var('+CATMAP[s.cat].v+')"></i>')+
-      esc(s.name)+'</button>').join("")+'</div>';
+  box.innerHTML=
+    (rest.length?
+      '<div class="autohead"><span class="lbl">사진의 색에서</span></div>'+
+      '<div class="autolist">'+rest.map(s=>
+        '<button class="tg" data-auto="'+esc(s.name)+'" data-autocat="'+esc(s.cat)+'">'+
+        (s.hex? '<i class="sw" style="background:'+esc(s.hex)+'"></i>'
+              : '<i class="dot" style="background:var('+CATMAP[s.cat].v+')"></i>')+
+        esc(s.name)+'</button>').join("")+'</div>'
+      : "")+
+    (rel.length?
+      '<div class="autohead"'+(rest.length?' style="margin-top:9px"':'')+'>'+
+        '<span class="lbl">이런 것도 자주 같이</span></div>'+
+      '<div class="autolist">'+rel.map(r=>
+        '<button class="tg" data-auto="'+esc(r.name)+'" data-autocat="'+esc(r.cat)+'"'+
+        ' title="'+esc(r.why? '‘'+r.why+'’ 붙인 사진 '+r.whyN+'장에 같이 있었어요' : r.n+'장에 같이 있었어요')+'">'+
+        '<i class="dot" style="background:var('+CATMAP[r.cat].v+')"></i>'+
+        esc(r.name)+'<span class="n">'+r.n+'</span></button>').join("")+'</div>'
+      : "");
   box.querySelectorAll("[data-auto]").forEach(b=>{
     b.addEventListener("click",()=>{
       if(PTAGS) PTAGS.commit(b.dataset.auto,b.dataset.autocat);
